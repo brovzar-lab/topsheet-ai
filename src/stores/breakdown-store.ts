@@ -8,6 +8,7 @@ interface BreakdownState {
     addElement: (sceneNumber: string, element: BreakdownElement) => void;
     removeElement: (sceneNumber: string, elementId: string) => void;
     markReviewed: (sceneNumber: string) => void;
+    copyElementToScenes: (element: BreakdownElement, targetSceneNumbers: string[]) => void;
     getBreakdown: (sceneNumber: string) => SceneBreakdown | undefined;
     clearAll: () => void;
 }
@@ -65,6 +66,32 @@ export const useBreakdownStore = create<BreakdownState>()(
                 }),
 
             getBreakdown: (sceneNumber) => get().breakdowns[sceneNumber],
+
+            copyElementToScenes: (element, targetSceneNumbers) =>
+                set((state) => {
+                    const updated = { ...state.breakdowns };
+                    for (const sceneNum of targetSceneNumbers) {
+                        const existing = updated[sceneNum];
+                        if (!existing) continue;
+                        // Don't duplicate if same name+category already exists
+                        const already = existing.elements.some(
+                            (e) => e.categoryId === element.categoryId && e.name.toLowerCase() === element.name.toLowerCase(),
+                        );
+                        if (already) continue;
+                        updated[sceneNum] = {
+                            ...existing,
+                            elements: [
+                                ...existing.elements,
+                                {
+                                    ...element,
+                                    id: `copy_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                                    source: 'manual',
+                                },
+                            ],
+                        };
+                    }
+                    return { breakdowns: updated };
+                }),
 
             clearAll: () => set({ breakdowns: {} }),
         }),

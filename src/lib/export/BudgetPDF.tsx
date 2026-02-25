@@ -189,12 +189,12 @@ function fmt(centavos: number): string {
 // PDF Document Component
 // -----------------------------------------------------------------------
 
-interface BudgetPDFProps {
+export interface BudgetPDFProps {
     draft: BudgetDraft;
     projectTitle: string;
 }
 
-function BudgetPDFDocument({ draft, projectTitle }: BudgetPDFProps) {
+export function BudgetPDFDocument({ draft, projectTitle }: BudgetPDFProps) {
     const sections = calcSectionTotals(draft.lineItems);
     const maxSection = Math.max(
         sections.ATL, sections.BTL, sections.POST,
@@ -324,4 +324,13 @@ export async function exportBudgetPDF(
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, 100);
+}
+
+export async function generateBudgetPDFBlob(
+    draft: BudgetDraft,
+    projectTitle: string,
+): Promise<Blob> {
+    return pdf(
+        <BudgetPDFDocument draft={draft} projectTitle={projectTitle} />,
+    ).toBlob();
 }

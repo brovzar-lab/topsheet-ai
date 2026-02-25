@@ -30,7 +30,7 @@ const EMPTY_SCENES: import('@/types').Scene[] = [];
 export function BreakdownPage() {
     const { id: projectId } = useParams<{ id: string }>();
     const scenes = useSceneStore((s) => s.scenes[projectId ?? ''] ?? EMPTY_SCENES);
-    const { breakdowns, setBreakdown, addElement, removeElement, markReviewed } = useBreakdownStore();
+    const { breakdowns, setBreakdown, addElement, removeElement, markReviewed, copyElementToScenes } = useBreakdownStore();
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
 
     const [selectedScene, setSelectedScene] = useState<string | null>(
@@ -354,6 +354,9 @@ export function BreakdownPage() {
                                 <ElementGrid
                                     elements={currentBreakdown.elements}
                                     onRemove={(elementId) => removeElement(currentScene.sceneNumber, elementId)}
+                                    allSceneNumbers={scenes.map((s) => s.sceneNumber)}
+                                    currentSceneNumber={currentScene.sceneNumber}
+                                    onCopyToScenes={(element, targets) => copyElementToScenes(element, targets)}
                                 />
                             </div>
                         ) : (
@@ -438,10 +441,18 @@ function SceneStatusIcon({ status }: { status: 'reviewed' | 'done' | 'pending' }
 function ElementGrid({
     elements,
     onRemove,
+    allSceneNumbers,
+    currentSceneNumber,
+    onCopyToScenes,
 }: {
     elements: BreakdownElement[];
     onRemove: (id: string) => void;
+    allSceneNumbers: string[];
+    currentSceneNumber: string;
+    onCopyToScenes: (element: BreakdownElement, targetScenes: string[]) => void;
 }) {
+    const [copyElement, setCopyElement] = useState<BreakdownElement | null>(null);
+    const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
     // Group by category
     const grouped = new Map<ElementCategoryId, BreakdownElement[]>();
     for (const el of elements) {
@@ -517,12 +528,69 @@ function ElementGrid({
                                     >
                                         <Trash2 size={12} />
                                     </button>
+                                    <button
+                                        onClick={() => {
+                                            setCopyElement(el);
+                                            setSelectedTargets(new Set());
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 text-lemon-gray-500 hover:text-lemon-cyan transition-all"
+                                        title="Copy to other scenes"
+                                    >
+                                        <Plus size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
                     </div>
                 );
             })}
+
+            {/* Copy to Scenes Modal */}
+            {copyElement && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setCopyElement(null)}>
+                    <div className="w-80 max-h-96 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg p-4" onClick={(e) => e.stopPropagation()}>
+                        <h4 className="text-sm text-lemon-text-primary font-display font-bold mb-1">Copy "{copyElement.name}"</h4>
+                        <p className="text-[0.6rem] text-lemon-text-muted mb-3">Select target scenes:</p>
+                        <div className="max-h-52 overflow-y-auto space-y-1 mb-3">
+                            {allSceneNumbers
+                                .filter((s) => s !== currentSceneNumber)
+                                .map((sceneNum) => (
+                                    <label key={sceneNum} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-lemon-bg-elevated/50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedTargets.has(sceneNum)}
+                                            onChange={() => {
+                                                setSelectedTargets((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(sceneNum)) next.delete(sceneNum);
+                                                    else next.add(sceneNum);
+                                                    return next;
+                                                });
+                                            }}
+                                            className="accent-lemon-cyan"
+                                        />
+                                        <span className="text-xs font-mono text-lemon-text-body">Scene {sceneNum}</span>
+                                    </label>
+                                ))}
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button onClick={() => setCopyElement(null)} className="px-3 py-1 text-xs text-lemon-text-muted hover:text-lemon-text-primary">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onCopyToScenes(copyElement, [...selectedTargets]);
+                                    setCopyElement(null);
+                                }}
+                                disabled={selectedTargets.size === 0}
+                                className="px-3 py-1 bg-lemon-cyan text-lemon-black font-bold text-xs rounded disabled:opacity-30"
+                            >
+                                Copy to {selectedTargets.size} scene{selectedTargets.size !== 1 ? 's' : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

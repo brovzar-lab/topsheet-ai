@@ -8,10 +8,10 @@ import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
-    ChevronDown, ChevronUp, Download, CalendarDays,
+    ChevronDown, ChevronUp, Download, CalendarDays, Eye,
 } from 'lucide-react';
 import { exportBudgetExcel } from '@/lib/export/budget-excel';
-import { exportBudgetPDF } from '@/lib/export/BudgetPDF';
+import { exportBudgetPDF, generateBudgetPDFBlob } from '@/lib/export/BudgetPDF';
 import { useProjectStore } from '@/stores/project-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
@@ -68,6 +68,7 @@ export function BudgetPage() {
     const [expandedSections, setExpandedSections] = useState<Set<BudgetSection>>(
         new Set(['ATL', 'BTL', 'POST']),
     );
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
     const selectedDraft = projectDrafts.find((d) => d.id === selectedDraftId) ?? projectDrafts[0];
     const compareDraft = projectDrafts.find((d) => d.id === compareDraftId);
@@ -252,6 +253,18 @@ export function BudgetPage() {
                             <Download size={14} />
                             {exportingPdf ? 'Exporting…' : '↓ PDF'}
                         </button>
+                        <button
+                            onClick={async () => {
+                                if (!selectedDraft) return;
+                                const blob = await generateBudgetPDFBlob(selectedDraft, project?.title ?? `Project_${projectId}`);
+                                const url = URL.createObjectURL(blob);
+                                setPdfPreviewUrl(url);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 border border-lemon-gray-700 text-lemon-text-body font-display font-bold uppercase text-sm rounded hover:border-lemon-cyan hover:text-lemon-cyan transition-colors"
+                        >
+                            <Eye size={14} />
+                            Preview
+                        </button>
                     </>
                 )}
 
@@ -333,6 +346,34 @@ export function BudgetPage() {
                     <p className="text-sm text-lemon-text-muted">
                         Click "Generate Budget" to create a draft from your breakdown data.
                     </p>
+                </div>
+            )}
+
+            {/* ── PDF Preview Modal ── */}
+            {pdfPreviewUrl && (
+                <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm">
+                    <div className="flex items-center justify-between px-6 py-3 bg-lemon-bg-secondary border-b border-lemon-gray-700">
+                        <div className="flex items-center gap-2">
+                            <Eye size={16} className="text-lemon-cyan" />
+                            <span className="font-display font-bold text-sm text-lemon-text-primary">PDF Preview</span>
+                        </div>
+                        <button
+                            onClick={() => {
+                                URL.revokeObjectURL(pdfPreviewUrl);
+                                setPdfPreviewUrl(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-mono text-lemon-text-muted hover:text-lemon-coral transition-colors"
+                        >
+                            ✕ Close
+                        </button>
+                    </div>
+                    <div className="flex-1 p-4">
+                        <iframe
+                            src={pdfPreviewUrl}
+                            className="w-full h-full rounded-lg border border-lemon-gray-700"
+                            title="Budget PDF Preview"
+                        />
+                    </div>
                 </div>
             )}
         </div>
