@@ -8,6 +8,8 @@ interface BudgetState {
     getDraftsForProject: (projectId: string) => BudgetDraft[];
     getDraft: (draftId: string) => BudgetDraft | undefined;
     getLatestDraft: (projectId: string) => BudgetDraft | undefined;
+    deleteDraftsForProject: (projectId: string) => void;
+    clearAll: () => void;
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -32,6 +34,13 @@ export const useBudgetStore = create<BudgetState>()(
                     .sort((a, b) => b.version - a.version);
                 return projectDrafts[0];
             },
+
+            deleteDraftsForProject: (projectId) =>
+                set((state) => ({
+                    drafts: state.drafts.filter((d) => d.projectId !== projectId),
+                })),
+
+            clearAll: () => set({ drafts: [] }),
         }),
         { name: 'lemon-budget-drafts' }
     )

@@ -7,6 +7,7 @@ import {
     SplitSquareHorizontal,
     CalendarDays,
     DollarSign,
+    Users,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -68,6 +69,18 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <DollarSign size={16} />
                 <span className="font-mono text-xs tracking-widest uppercase">BUDGET</span>
             </NavLink>
+            <NavLink
+                to={`/project/${projectId}/doods`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <Users size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">DOODs</span>
+            </NavLink>
         </div>
     );
 }
@@ -126,6 +139,9 @@ export function Sidebar() {
             <div className="p-4 border-t border-lemon-gray-700">
                 <span className="font-mono text-[0.55rem] tracking-[0.15em] text-lemon-gray-500 uppercase">
                     LEMON STUDIOS © 2026
+                </span>
+                <span className="block font-mono text-[0.5rem] tracking-wider text-lemon-gray-600 mt-0.5">
+                    v0.3.0
                 </span>
             </div>
         </aside>

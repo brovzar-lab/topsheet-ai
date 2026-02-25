@@ -6,6 +6,7 @@ import { ProjectPage } from './pages/ProjectPage';
 import { BreakdownPage } from './pages/BreakdownPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { BudgetPage } from './pages/BudgetPage';
+import { DOODsPage } from './pages/DOODsPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
                     <Route path="/project/:id/breakdown" element={<BreakdownPage />} />
                     <Route path="/project/:id/schedule" element={<SchedulePage />} />
                     <Route path="/project/:id/budget" element={<BudgetPage />} />
+                    <Route path="/project/:id/doods" element={<DOODsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
             </main>

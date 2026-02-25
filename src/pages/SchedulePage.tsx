@@ -30,6 +30,7 @@ import {
     Columns3,
     Check,
     Pencil,
+    Scissors,
 } from 'lucide-react';
 import type { StripboardStrip, ShootDay, SceneBreakdown } from '@/types';
 import { useSceneStore } from '@/stores/scene-store';
@@ -124,12 +125,14 @@ function StripSynopsis({
     sceneContent,
     onClose,
     onUpdateNotes,
+    onSplitScene,
 }: {
     strip: StripboardStrip;
     breakdown?: SceneBreakdown;
     sceneContent?: string;
     onClose: () => void;
     onUpdateNotes: (notes: string) => void;
+    onSplitScene: () => void;
 }) {
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesVal, setNotesVal] = useState(strip.notes ?? '');
@@ -235,6 +238,17 @@ function StripSynopsis({
                     </p>
                 )}
             </div>
+
+            {/* Split Scene button */}
+            <div className="mt-3 pt-3 border-t border-lemon-gray-700">
+                <button
+                    onClick={(e) => { e.stopPropagation(); onSplitScene(); }}
+                    className="flex items-center gap-1.5 text-xs text-lemon-gray-400 hover:text-lemon-yellow transition-colors font-mono"
+                >
+                    <Scissors size={11} />
+                    Split Scene
+                </button>
+            </div>
         </div>
     );
 }
@@ -257,6 +271,7 @@ function SortableStrip({
     onCommitEdit,
     onCancelEdit,
     onUpdateNotes,
+    onSplitScene,
 }: {
     strip: StripboardStrip;
     dayId: string;
@@ -271,6 +286,7 @@ function SortableStrip({
     onCommitEdit: (stripId: string, field: string, value: string) => void;
     onCancelEdit: () => void;
     onUpdateNotes: (stripId: string, notes: string) => void;
+    onSplitScene: (stripId: string) => void;
 }) {
     const {
         attributes,
@@ -392,6 +408,7 @@ function SortableStrip({
                     sceneContent={sceneContent}
                     onClose={onToggle}
                     onUpdateNotes={(notes) => onUpdateNotes(strip.id, notes)}
+                    onSplitScene={() => onSplitScene(strip.id)}
                 />
             )}
         </div>
@@ -436,6 +453,8 @@ function DayGroup({
     onCommitEdit,
     onCancelEdit,
     onUpdateNotes,
+    onSplitScene,
+    onSetDayDate,
 }: {
     day: ShootDay;
     projectId: string;
@@ -451,6 +470,8 @@ function DayGroup({
     onCommitEdit: (stripId: string, field: string, value: string) => void;
     onCancelEdit: () => void;
     onUpdateNotes: (stripId: string, notes: string) => void;
+    onSplitScene: (dayId: string, stripId: string) => void;
+    onSetDayDate: (dayId: string, date: string) => void;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const totalFullPages = Math.floor(day.totalPages / 8);
@@ -483,11 +504,13 @@ function DayGroup({
                     DAY {day.dayNumber}
                 </span>
 
-                {day.date && (
-                    <span className="font-mono text-[0.65rem] text-lemon-text-muted">
-                        {day.date}
-                    </span>
-                )}
+                <input
+                    type="date"
+                    value={day.date ?? ''}
+                    onChange={(e) => onSetDayDate(day.id, e.target.value)}
+                    className="font-mono text-[0.65rem] text-lemon-text-muted bg-transparent border border-transparent hover:border-lemon-gray-600 focus:border-lemon-cyan rounded px-1 py-0.5 outline-none cursor-pointer transition-colors"
+                    title="Set shoot date"
+                />
 
                 <span className="font-mono text-[0.65rem] text-lemon-text-muted truncate">
                     {day.location || 'No location'}
@@ -544,6 +567,7 @@ function DayGroup({
                                     onCommitEdit={onCommitEdit}
                                     onCancelEdit={onCancelEdit}
                                     onUpdateNotes={onUpdateNotes}
+                                    onSplitScene={(stripId) => onSplitScene(day.id, stripId)}
                                 />
                             ))
                         )}
@@ -572,6 +596,8 @@ export function SchedulePage() {
     const removeDay = useScheduleStore((s) => s.removeDay);
     const updateStrip = useScheduleStore((s) => s.updateStrip);
     const sortStrips = useScheduleStore((s) => s.sortStrips);
+    const splitStripAction = useScheduleStore((s) => s.splitStrip);
+    const setDayDate = useScheduleStore((s) => s.setDayDate);
 
     // Active drag state
     const [activeStrip, setActiveStrip] = useState<StripboardStrip | null>(null);
@@ -781,8 +807,8 @@ export function SchedulePage() {
                             <button
                                 onClick={() => { setSortMenuOpen(!sortMenuOpen); setColumnMenuOpen(false); }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 border font-mono text-xs rounded transition-colors ${activeSort
-                                        ? 'border-lemon-cyan text-lemon-cyan bg-lemon-cyan/10'
-                                        : 'border-lemon-gray-600 text-lemon-text-body hover:bg-lemon-bg-elevated'
+                                    ? 'border-lemon-cyan text-lemon-cyan bg-lemon-cyan/10'
+                                    : 'border-lemon-gray-600 text-lemon-text-body hover:bg-lemon-bg-elevated'
                                     }`}
                                 title="Sort strips"
                             >
@@ -832,8 +858,8 @@ export function SchedulePage() {
                                             className="w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-lemon-bg-elevated transition-colors flex items-center gap-2 text-lemon-text-body"
                                         >
                                             <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${visibleColumns.has(col.key)
-                                                    ? 'border-lemon-cyan bg-lemon-cyan/20'
-                                                    : 'border-lemon-gray-600'
+                                                ? 'border-lemon-cyan bg-lemon-cyan/20'
+                                                : 'border-lemon-gray-600'
                                                 }`}>
                                                 {visibleColumns.has(col.key) && <Check size={10} className="text-lemon-cyan" />}
                                             </span>
@@ -907,6 +933,8 @@ export function SchedulePage() {
                                 onCommitEdit={handleCommitEdit}
                                 onCancelEdit={handleCancelEdit}
                                 onUpdateNotes={handleUpdateNotes}
+                                onSplitScene={(dayId, stripId) => { splitStripAction(projectId, dayId, stripId); setExpandedStripId(null); }}
+                                onSetDayDate={(dayId, date) => setDayDate(projectId, dayId, date)}
                             />
                         ))}
 

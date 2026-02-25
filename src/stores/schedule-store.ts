@@ -58,6 +58,12 @@ interface ScheduleState {
         sortBy: 'sceneNumber' | 'location' | 'intExt' | 'timeOfDay' | 'pageCount',
         direction: 'asc' | 'desc',
     ) => void;
+    /** Split a strip into two halves (split scene tool) */
+    splitStrip: (projectId: string, dayId: string, stripId: string) => void;
+    /** Set calendar date on a shoot day */
+    setDayDate: (projectId: string, dayId: string, date: string) => void;
+    /** Clear all schedules */
+    clearAll: () => void;
 }
 
 function recalcDayPages(strips: StripboardStrip[]): number {
@@ -268,6 +274,70 @@ export const useScheduleStore = create<ScheduleState>()(
                         },
                     };
                 }),
+
+            splitStrip: (projectId, dayId, stripId) =>
+                set((state) => {
+                    const schedule = state.schedules[projectId];
+                    if (!schedule) return state;
+
+                    const days = schedule.shootDays.map((d) => {
+                        if (d.id !== dayId) return d;
+                        const idx = d.strips.findIndex((s) => s.id === stripId);
+                        if (idx === -1) return d;
+
+                        const original = d.strips[idx]!;
+                        const halfPages = Math.max(1, Math.floor(original.pageCount / 2));
+                        const remainder = original.pageCount - halfPages;
+
+                        // Part A keeps original ID, part B gets a new ID
+                        const partA: StripboardStrip = {
+                            ...original,
+                            pageCount: halfPages,
+                            sceneNumber: `${original.sceneNumber}A`,
+                        };
+                        const partB: StripboardStrip = {
+                            ...original,
+                            id: `${original.id}_split_${Date.now()}`,
+                            pageCount: remainder,
+                            sceneNumber: `${original.sceneNumber}B`,
+                        };
+
+                        const newStrips = [...d.strips];
+                        newStrips.splice(idx, 1, partA, partB);
+
+                        return {
+                            ...d,
+                            strips: newStrips,
+                            totalPages: recalcDayPages(newStrips),
+                        };
+                    });
+
+                    return {
+                        schedules: {
+                            ...state.schedules,
+                            [projectId]: { ...schedule, shootDays: days },
+                        },
+                    };
+                }),
+
+            setDayDate: (projectId, dayId, date) =>
+                set((state) => {
+                    const schedule = state.schedules[projectId];
+                    if (!schedule) return state;
+
+                    const days = schedule.shootDays.map((d) =>
+                        d.id === dayId ? { ...d, date } : d,
+                    );
+
+                    return {
+                        schedules: {
+                            ...state.schedules,
+                            [projectId]: { ...schedule, shootDays: days },
+                        },
+                    };
+                }),
+
+            clearAll: () => set({ schedules: {} }),
         }),
         { name: 'lemon-budget-schedule' }
     )

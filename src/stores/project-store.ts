@@ -9,6 +9,8 @@ interface ProjectState {
     setActiveProject: (id: string) => void;
     getProject: (id: string) => Project | undefined;
     updateProject: (id: string, updates: Partial<Project>) => void;
+    deleteProject: (id: string) => void;
+    clearAll: () => void;
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -33,6 +35,14 @@ export const useProjectStore = create<ProjectState>()(
                         p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
                     ),
                 })),
+
+            deleteProject: (id) =>
+                set((state) => ({
+                    projects: state.projects.filter((p) => p.id !== id),
+                    activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+                })),
+
+            clearAll: () => set({ projects: [], activeProjectId: null }),
         }),
         { name: 'lemon-budget-projects' }
     )
