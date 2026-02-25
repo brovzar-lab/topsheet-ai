@@ -8,12 +8,13 @@ import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
-    ChevronDown, ChevronUp, Download,
+    ChevronDown, ChevronUp, Download, CalendarDays,
 } from 'lucide-react';
 import { exportBudgetExcel } from '@/lib/export/budget-excel';
 import { exportBudgetPDF } from '@/lib/export/BudgetPDF';
 import { useProjectStore } from '@/stores/project-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { formatMXN, formatMXNShort, calcSectionTotals, getSection } from '@/lib/budget/calculator';
@@ -50,6 +51,7 @@ export function BudgetPage() {
     const { id: projectId } = useParams<{ id: string }>();
     const project = useProjectStore((s) => s.getProject(projectId ?? ''));
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
+    const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
     const { drafts, addDraft, getDraftsForProject } = useBudgetStore();
     const settings = useSettingsStore();
 
@@ -87,11 +89,12 @@ export function BudgetPage() {
             contingencyPercent: settings.defaultContingencyPercent,
             exchangeRate: settings.exchangeRate,
             startVersion: nextVersion,
+            scheduleData: schedule,
         });
 
         addDraft(draft);
         setSelectedDraftId(draft.id);
-    }, [projectId, breakdowns, project, settings, addDraft]);
+    }, [projectId, breakdowns, project, settings, schedule, addDraft]);
 
     const handleClone = useCallback(() => {
         if (!selectedDraft) return;
@@ -190,6 +193,16 @@ export function BudgetPage() {
                     >
                         Breakdown
                     </Link>
+                </div>
+            )}
+
+            {/* Schedule integration indicator */}
+            {schedule && (
+                <div className="mb-4 px-3 py-2 bg-lemon-cyan/5 border border-lemon-cyan/20 rounded-lg flex items-center gap-2">
+                    <CalendarDays size={14} className="text-lemon-cyan" />
+                    <span className="text-xs text-lemon-text-body font-mono">
+                        Schedule linked: <span className="text-lemon-cyan font-bold">{schedule.shootDays.length}</span> shoot days
+                    </span>
                 </div>
             )}
 
@@ -515,11 +528,55 @@ function LineItemTable({
                                         );
                                     })}
                                 </tbody>
+                                {/* Section subtotal row */}
+                                <tfoot>
+                                    <tr className="border-t-2 border-lemon-gray-600">
+                                        <td colSpan={6} className="px-4 py-2 text-right font-display font-bold text-xs uppercase text-lemon-text-muted">
+                                            {SECTION_LABELS[section]} Subtotal
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-mono font-bold text-sm" style={{ color: SECTION_COLORS[section] }}>
+                                            {formatMXN(sectionTotal, true)}
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         )}
                     </div>
                 );
             })}
+
+            {/* Grand Total Footer */}
+            {(() => {
+                const sectionTotals = calcSectionTotals(draft.lineItems);
+                return (
+                    <div className="mt-4 p-4 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg">
+                        <div className="space-y-1.5 mb-3">
+                            {(['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'] as BudgetSection[]).map((s) => {
+                                const amt = sectionTotals[s];
+                                if (amt === 0) return null;
+                                return (
+                                    <div key={s} className="flex items-center justify-between text-xs font-mono">
+                                        <span className="text-lemon-text-muted">{SECTION_LABELS[s]}</span>
+                                        <span style={{ color: SECTION_COLORS[s] }}>{formatMXN(amt, true)}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="border-t border-lemon-gray-600 pt-2 flex items-center justify-between">
+                            <span className="font-display font-bold text-sm text-lemon-text-muted uppercase">Subtotal</span>
+                            <span className="font-mono font-bold text-sm text-lemon-text-primary">{formatMXN(sectionTotals.total, true)}</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                            <span className="font-display font-bold text-sm text-lemon-text-muted uppercase">Contingency {draft.contingencyPercent}%</span>
+                            <span className="font-mono font-bold text-sm text-lemon-text-primary">{formatMXN(draft.contingencyCentavos, true)}</span>
+                        </div>
+                        <div className="border-t border-lemon-yellow/30 mt-2 pt-2 flex items-center justify-between bg-lemon-yellow/5 rounded px-3 py-2 -mx-1">
+                            <span className="font-display font-black text-sm text-lemon-yellow uppercase">Grand Total</span>
+                            <span className="font-display font-black text-lg text-lemon-yellow">{formatMXN(draft.totalCentavos, true)}</span>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

@@ -5,7 +5,7 @@
  * estimates shoot days, applies fringes, and creates a draft.
  */
 
-import type { SceneBreakdown, BudgetLineItem, BudgetDraft, ElementCategoryId, BudgetCategoryCode } from '@/types';
+import type { SceneBreakdown, BudgetLineItem, BudgetDraft, ElementCategoryId, BudgetCategoryCode, ScheduleDraft } from '@/types';
 import { getAllMPIItems } from '@/data/mpi-data';
 import { calcSubtotal, calcSectionTotals, calcContingency } from './calculator';
 import { calculateFringes, DEFAULT_FRINGES } from './fringe-engine';
@@ -92,6 +92,8 @@ export interface AutoBudgetOptions {
     exchangeRate: number;
     /** Version number for the new draft. Defaults to 1. */
     startVersion?: number;
+    /** Pass the schedule for precise shoot days & per-cast working days */
+    scheduleData?: ScheduleDraft;
 }
 
 /**
@@ -102,8 +104,30 @@ export function generateAutoBudget(
     options: AutoBudgetOptions,
 ): BudgetDraft {
     const scenes = Object.values(breakdowns);
-    const shootDays = estimateShootDays(options.totalPages);
+
+    // Use actual schedule data when available, fall back to estimation
+    const hasSchedule = !!options.scheduleData;
+    const shootDays = hasSchedule
+        ? options.scheduleData!.shootDays.length
+        : estimateShootDays(options.totalPages);
     const shootWeeks = Math.ceil(shootDays / 6); // 6-day weeks
+
+    // Build per-cast working days map from schedule strips
+    const castWorkingDays = new Map<string, number>();
+    if (hasSchedule) {
+        for (const day of options.scheduleData!.shootDays) {
+            const charsThisDay = new Set<string>();
+            for (const strip of day.strips) {
+                for (const char of strip.characters) {
+                    charsThisDay.add(char.toUpperCase().trim());
+                }
+            }
+            for (const char of charsThisDay) {
+                castWorkingDays.set(char, (castWorkingDays.get(char) ?? 0) + 1);
+            }
+        }
+    }
+
     const lineItems: BudgetLineItem[] = [];
     const allMPI = getAllMPIItems();
     const getOverrideRate = useMPIStore.getState().getOverrideRate;
@@ -167,11 +191,21 @@ export function generateAutoBudget(
         const unit = mpiMatch?.unit ?? 'flat';
 
         switch (elem.categoryId) {
-            case 'cast':
-                // Cast: per person, for the shoot duration
+            case 'cast': {
+                // Cast: per person, for their actual working days
                 qty = 1;
-                duration = unit === 'week' ? shootWeeks : unit === 'day' ? Math.min(elem.sceneCount, shootDays) : 1;
+                const castKey = elem.name.toUpperCase().trim();
+                const actualDays = castWorkingDays.get(castKey);
+                if (actualDays !== undefined && unit === 'day') {
+                    duration = actualDays;
+                } else if (actualDays !== undefined && unit === 'week') {
+                    duration = Math.ceil(actualDays / 6);
+                } else {
+                    // Fallback: heuristic
+                    duration = unit === 'week' ? shootWeeks : unit === 'day' ? Math.min(elem.sceneCount, shootDays) : 1;
+                }
                 break;
+            }
             case 'extras':
                 // Extras: aggregate quantity, per day they appear
                 qty = elem.totalQty;
@@ -264,7 +298,7 @@ export function generateAutoBudget(
         contingencyCentavos,
         exchangeRate: options.exchangeRate,
         createdAt: new Date().toISOString(),
-        notes: `Auto-generated v${version} from ${scenes.length} scenes. Est. ${shootDays} shoot days (${shootWeeks} weeks). Fringes: IMSS 35%, ANDA 13%, OT 5%.`,
+        notes: `Auto-generated v${version} from ${scenes.length} scenes. ${hasSchedule ? `From schedule: ${shootDays}` : `Est. ${shootDays}`} shoot days (${shootWeeks} weeks). Fringes: IMSS 35%, ANDA 13%, OT 5%.`,
     };
 
     console.log(`[auto-budget] Generated ${allItems.length} line items, total: ${sectionTotals.total + contingencyCentavos} centavos`);

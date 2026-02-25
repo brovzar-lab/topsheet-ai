@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     DndContext,
@@ -26,6 +26,10 @@ import {
     ChevronRight,
     User2,
     X,
+    ArrowUpDown,
+    Columns3,
+    Check,
+    Pencil,
 } from 'lucide-react';
 import type { StripboardStrip, ShootDay, SceneBreakdown } from '@/types';
 import { useSceneStore } from '@/stores/scene-store';
@@ -33,6 +37,30 @@ import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { getCategoryById } from '@/data/element-categories';
+
+// -----------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------
+
+type SortField = 'sceneNumber' | 'location' | 'intExt' | 'timeOfDay' | 'pageCount';
+type ColumnKey = 'sceneNumber' | 'intExt' | 'location' | 'timeOfDay' | 'pages' | 'cast';
+
+const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+    { key: 'sceneNumber', label: 'Scene #' },
+    { key: 'intExt', label: 'INT/EXT' },
+    { key: 'location', label: 'Location' },
+    { key: 'timeOfDay', label: 'Time of Day' },
+    { key: 'pages', label: 'Pages' },
+    { key: 'cast', label: 'Cast' },
+];
+
+const SORT_OPTIONS: { key: SortField; label: string }[] = [
+    { key: 'sceneNumber', label: 'Scene #' },
+    { key: 'location', label: 'Location' },
+    { key: 'intExt', label: 'INT/EXT' },
+    { key: 'timeOfDay', label: 'Time of Day' },
+    { key: 'pageCount', label: 'Pages' },
+];
 
 // -----------------------------------------------------------------------
 // Strip color → CSS classes
@@ -46,6 +74,47 @@ const STRIP_COLORS: Record<string, { bg: string; border: string; text: string }>
 };
 
 // -----------------------------------------------------------------------
+// Inline Edit Input
+// -----------------------------------------------------------------------
+
+function InlineInput({
+    value,
+    onCommit,
+    onCancel,
+    className,
+}: {
+    value: string;
+    onCommit: (val: string) => void;
+    onCancel: () => void;
+    className?: string;
+}) {
+    const ref = useRef<HTMLInputElement>(null);
+    const [val, setVal] = useState(value);
+
+    useEffect(() => {
+        ref.current?.focus();
+        ref.current?.select();
+    }, []);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') { e.preventDefault(); onCommit(val); }
+        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    };
+
+    return (
+        <input
+            ref={ref}
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onBlur={() => onCommit(val)}
+            onKeyDown={handleKeyDown}
+            className={`bg-transparent border-b border-current outline-none font-mono text-xs ${className ?? ''}`}
+            onClick={(e) => e.stopPropagation()}
+        />
+    );
+}
+
+// -----------------------------------------------------------------------
 // Synopsis Panel (click strip to expand)
 // -----------------------------------------------------------------------
 
@@ -54,12 +123,17 @@ function StripSynopsis({
     breakdown,
     sceneContent,
     onClose,
+    onUpdateNotes,
 }: {
     strip: StripboardStrip;
     breakdown?: SceneBreakdown;
     sceneContent?: string;
     onClose: () => void;
+    onUpdateNotes: (notes: string) => void;
 }) {
+    const [editingNotes, setEditingNotes] = useState(false);
+    const [notesVal, setNotesVal] = useState(strip.notes ?? '');
+
     // Group elements by category
     const grouped = useMemo(() => {
         if (!breakdown) return [];
@@ -83,7 +157,6 @@ function StripSynopsis({
     // Build a short synopsis paragraph from the scene content
     const synopsis = useMemo(() => {
         if (!sceneContent) return null;
-        // Take the first ~300 characters, trim at word boundary
         const trimmed = sceneContent.slice(0, 300).trim();
         const lastSpace = trimmed.lastIndexOf(' ');
         return lastSpace > 200 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…';
@@ -131,6 +204,37 @@ function StripSynopsis({
             ) : (
                 <p className="text-xs text-lemon-text-muted">No breakdown elements yet — run the breakdown first.</p>
             )}
+
+            {/* Notes section with inline editing */}
+            <div className="mt-3 pt-3 border-t border-lemon-gray-700">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-[0.6rem] text-lemon-text-muted uppercase tracking-wider">Notes</span>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setEditingNotes(true); }}
+                        className="text-lemon-gray-500 hover:text-lemon-cyan transition-colors"
+                    >
+                        <Pencil size={10} />
+                    </button>
+                </div>
+                {editingNotes ? (
+                    <textarea
+                        value={notesVal}
+                        onChange={(e) => setNotesVal(e.target.value)}
+                        onBlur={() => { onUpdateNotes(notesVal); setEditingNotes(false); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') { setEditingNotes(false); setNotesVal(strip.notes ?? ''); }
+                        }}
+                        autoFocus
+                        rows={2}
+                        className="w-full bg-lemon-bg-primary border border-lemon-gray-600 rounded px-2 py-1 text-xs text-lemon-text-body font-mono outline-none focus:border-lemon-cyan resize-none"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                ) : (
+                    <p className="text-xs text-lemon-text-muted italic">
+                        {strip.notes || 'No notes. Click pencil to add.'}
+                    </p>
+                )}
+            </div>
         </div>
     );
 }
@@ -146,6 +250,13 @@ function SortableStrip({
     onToggle,
     breakdown,
     sceneContent,
+    visibleColumns,
+    editingStripId,
+    editField,
+    onStartEdit,
+    onCommitEdit,
+    onCancelEdit,
+    onUpdateNotes,
 }: {
     strip: StripboardStrip;
     dayId: string;
@@ -153,6 +264,13 @@ function SortableStrip({
     onToggle: () => void;
     breakdown?: SceneBreakdown;
     sceneContent?: string;
+    visibleColumns: Set<ColumnKey>;
+    editingStripId: string | null;
+    editField: string | null;
+    onStartEdit: (stripId: string, field: string) => void;
+    onCommitEdit: (stripId: string, field: string, value: string) => void;
+    onCancelEdit: () => void;
+    onUpdateNotes: (stripId: string, notes: string) => void;
 }) {
     const {
         attributes,
@@ -180,6 +298,8 @@ function SortableStrip({
         ? `${fullPages}${eighths > 0 ? ` ${eighths}/8` : ''}`
         : `${eighths}/8`;
 
+    const isEditing = editingStripId === strip.id;
+
     return (
         <div ref={setNodeRef} style={style}>
             <div
@@ -202,33 +322,56 @@ function SortableStrip({
                 </button>
 
                 {/* Scene number */}
-                <span className="font-bold w-10 text-center flex-shrink-0">
-                    {strip.sceneNumber}
-                </span>
+                {visibleColumns.has('sceneNumber') && (
+                    <span className="font-bold w-10 text-center flex-shrink-0">
+                        {strip.sceneNumber}
+                    </span>
+                )}
 
                 {/* INT/EXT */}
-                <span className="w-8 text-center flex-shrink-0 opacity-70 text-[0.65rem]">
-                    {strip.intExt}
-                </span>
+                {visibleColumns.has('intExt') && (
+                    <span className="w-8 text-center flex-shrink-0 opacity-70 text-[0.65rem]">
+                        {strip.intExt}
+                    </span>
+                )}
 
-                {/* Location */}
-                <span className="flex-1 truncate font-medium">
-                    {strip.location}
-                    {strip.subLocation ? ` — ${strip.subLocation}` : ''}
-                </span>
+                {/* Location — double-click to edit */}
+                {visibleColumns.has('location') && (
+                    isEditing && editField === 'location' ? (
+                        <InlineInput
+                            value={strip.location}
+                            onCommit={(v) => onCommitEdit(strip.id, 'location', v)}
+                            onCancel={onCancelEdit}
+                            className="flex-1"
+                        />
+                    ) : (
+                        <span
+                            className="flex-1 truncate font-medium hover:underline hover:decoration-dotted"
+                            onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(strip.id, 'location'); }}
+                            title="Double-click to edit"
+                        >
+                            {strip.location}
+                            {strip.subLocation ? ` — ${strip.subLocation}` : ''}
+                        </span>
+                    )
+                )}
 
                 {/* Time of day */}
-                <span className="w-14 text-center flex-shrink-0 opacity-70 text-[0.65rem] uppercase">
-                    {strip.timeOfDay}
-                </span>
+                {visibleColumns.has('timeOfDay') && (
+                    <span className="w-14 text-center flex-shrink-0 opacity-70 text-[0.65rem] uppercase">
+                        {strip.timeOfDay}
+                    </span>
+                )}
 
                 {/* Pages */}
-                <span className="w-12 text-right flex-shrink-0 font-bold">
-                    {pageDisplay}
-                </span>
+                {visibleColumns.has('pages') && (
+                    <span className="w-12 text-right flex-shrink-0 font-bold">
+                        {pageDisplay}
+                    </span>
+                )}
 
                 {/* Cast count */}
-                {strip.characters.length > 0 && (
+                {visibleColumns.has('cast') && strip.characters.length > 0 && (
                     <span className="flex items-center gap-0.5 flex-shrink-0 opacity-60" title={strip.characters.join(', ')}>
                         <User2 size={11} />
                         <span>{strip.characters.length}</span>
@@ -248,6 +391,7 @@ function SortableStrip({
                     breakdown={breakdown}
                     sceneContent={sceneContent}
                     onClose={onToggle}
+                    onUpdateNotes={(notes) => onUpdateNotes(strip.id, notes)}
                 />
             )}
         </div>
@@ -285,6 +429,13 @@ function DayGroup({
     onToggleStrip,
     breakdowns,
     sceneContentMap,
+    visibleColumns,
+    editingStripId,
+    editField,
+    onStartEdit,
+    onCommitEdit,
+    onCancelEdit,
+    onUpdateNotes,
 }: {
     day: ShootDay;
     projectId: string;
@@ -293,6 +444,13 @@ function DayGroup({
     onToggleStrip: (stripId: string) => void;
     breakdowns: Record<string, SceneBreakdown>;
     sceneContentMap: Record<string, string>;
+    visibleColumns: Set<ColumnKey>;
+    editingStripId: string | null;
+    editField: string | null;
+    onStartEdit: (stripId: string, field: string) => void;
+    onCommitEdit: (stripId: string, field: string, value: string) => void;
+    onCancelEdit: () => void;
+    onUpdateNotes: (stripId: string, notes: string) => void;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const totalFullPages = Math.floor(day.totalPages / 8);
@@ -379,6 +537,13 @@ function DayGroup({
                                     onToggle={() => onToggleStrip(strip.id)}
                                     breakdown={breakdowns[strip.sceneNumber]}
                                     sceneContent={sceneContentMap[strip.sceneNumber]}
+                                    visibleColumns={visibleColumns}
+                                    editingStripId={editingStripId}
+                                    editField={editField}
+                                    onStartEdit={onStartEdit}
+                                    onCommitEdit={onCommitEdit}
+                                    onCancelEdit={onCancelEdit}
+                                    onUpdateNotes={onUpdateNotes}
                                 />
                             ))
                         )}
@@ -405,12 +570,28 @@ export function SchedulePage() {
     const moveStrip = useScheduleStore((s) => s.moveStrip);
     const addDay = useScheduleStore((s) => s.addDay);
     const removeDay = useScheduleStore((s) => s.removeDay);
+    const updateStrip = useScheduleStore((s) => s.updateStrip);
+    const sortStrips = useScheduleStore((s) => s.sortStrips);
 
     // Active drag state
     const [activeStrip, setActiveStrip] = useState<StripboardStrip | null>(null);
 
     // Expanded strip for synopsis
     const [expandedStripId, setExpandedStripId] = useState<string | null>(null);
+
+    // Inline editing state
+    const [editingStripId, setEditingStripId] = useState<string | null>(null);
+    const [editField, setEditField] = useState<string | null>(null);
+
+    // Sort state
+    const [sortMenuOpen, setSortMenuOpen] = useState(false);
+    const [activeSort, setActiveSort] = useState<{ field: SortField; dir: 'asc' | 'desc' } | null>(null);
+
+    // Column visibility state
+    const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+    const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
+        new Set(['sceneNumber', 'intExt', 'location', 'timeOfDay', 'pages', 'cast']),
+    );
 
     // Build scene content lookup for synopsis
     const sceneContentMap = useMemo(() => {
@@ -448,6 +629,52 @@ export function SchedulePage() {
     // Toggle strip synopsis
     const handleToggleStrip = useCallback((stripId: string) => {
         setExpandedStripId((prev) => (prev === stripId ? null : stripId));
+    }, []);
+
+    // Inline editing handlers
+    const handleStartEdit = useCallback((stripId: string, field: string) => {
+        setEditingStripId(stripId);
+        setEditField(field);
+    }, []);
+
+    const handleCommitEdit = useCallback((stripId: string, field: string, value: string) => {
+        if (!projectId) return;
+        updateStrip(projectId, stripId, { [field]: value });
+        setEditingStripId(null);
+        setEditField(null);
+    }, [projectId, updateStrip]);
+
+    const handleCancelEdit = useCallback(() => {
+        setEditingStripId(null);
+        setEditField(null);
+    }, []);
+
+    const handleUpdateNotes = useCallback((stripId: string, notes: string) => {
+        if (!projectId) return;
+        updateStrip(projectId, stripId, { notes });
+    }, [projectId, updateStrip]);
+
+    // Sort handler
+    const handleSort = useCallback((field: SortField) => {
+        if (!projectId) return;
+        const dir = activeSort?.field === field && activeSort.dir === 'asc' ? 'desc' : 'asc';
+        sortStrips(projectId, field, dir);
+        setActiveSort({ field, dir });
+        setSortMenuOpen(false);
+    }, [projectId, sortStrips, activeSort]);
+
+    // Column toggle
+    const toggleColumn = useCallback((col: ColumnKey) => {
+        setVisibleColumns((prev) => {
+            const next = new Set(prev);
+            if (next.has(col) && next.size > 2) {
+                // Keep at least 2 columns visible
+                next.delete(col);
+            } else {
+                next.add(col);
+            }
+            return next;
+        });
     }, []);
 
     // Drag handlers
@@ -549,6 +776,74 @@ export function SchedulePage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
+                        {/* Sort dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setSortMenuOpen(!sortMenuOpen); setColumnMenuOpen(false); }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 border font-mono text-xs rounded transition-colors ${activeSort
+                                        ? 'border-lemon-cyan text-lemon-cyan bg-lemon-cyan/10'
+                                        : 'border-lemon-gray-600 text-lemon-text-body hover:bg-lemon-bg-elevated'
+                                    }`}
+                                title="Sort strips"
+                            >
+                                <ArrowUpDown size={12} />
+                                SORT
+                                {activeSort && (
+                                    <span className="text-[0.6rem] opacity-70">
+                                        {activeSort.dir === 'asc' ? '↑' : '↓'}
+                                    </span>
+                                )}
+                            </button>
+                            {sortMenuOpen && (
+                                <div className="absolute right-0 top-full mt-1 w-40 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg shadow-xl z-50 py-1">
+                                    {SORT_OPTIONS.map((opt) => (
+                                        <button
+                                            key={opt.key}
+                                            onClick={() => handleSort(opt.key)}
+                                            className={`w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-lemon-bg-elevated transition-colors flex items-center justify-between ${activeSort?.field === opt.key ? 'text-lemon-cyan' : 'text-lemon-text-body'
+                                                }`}
+                                        >
+                                            {opt.label}
+                                            {activeSort?.field === opt.key && (
+                                                <span>{activeSort.dir === 'asc' ? '↑' : '↓'}</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Columns dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setColumnMenuOpen(!columnMenuOpen); setSortMenuOpen(false); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body font-mono text-xs rounded hover:bg-lemon-bg-elevated transition-colors"
+                                title="Show/hide columns"
+                            >
+                                <Columns3 size={12} />
+                                COLUMNS
+                            </button>
+                            {columnMenuOpen && (
+                                <div className="absolute right-0 top-full mt-1 w-40 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg shadow-xl z-50 py-1">
+                                    {ALL_COLUMNS.map((col) => (
+                                        <button
+                                            key={col.key}
+                                            onClick={() => toggleColumn(col.key)}
+                                            className="w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-lemon-bg-elevated transition-colors flex items-center gap-2 text-lemon-text-body"
+                                        >
+                                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${visibleColumns.has(col.key)
+                                                    ? 'border-lemon-cyan bg-lemon-cyan/20'
+                                                    : 'border-lemon-gray-600'
+                                                }`}>
+                                                {visibleColumns.has(col.key) && <Check size={10} className="text-lemon-cyan" />}
+                                            </span>
+                                            {col.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <button
                             onClick={() => addDay(projectId)}
                             className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body
@@ -582,12 +877,12 @@ export function SchedulePage() {
                     </div>
                 ))}
                 <span className="ml-4 font-mono text-[0.6rem] text-lemon-text-muted italic">
-                    Click a strip to see synopsis
+                    Click strip to see synopsis • Double-click location to edit
                 </span>
             </div>
 
             {/* ── Stripboard ── */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
                 {schedule ? (
                     <DndContext
                         sensors={sensors}
@@ -605,6 +900,13 @@ export function SchedulePage() {
                                 onToggleStrip={handleToggleStrip}
                                 breakdowns={breakdowns}
                                 sceneContentMap={sceneContentMap}
+                                visibleColumns={visibleColumns}
+                                editingStripId={editingStripId}
+                                editField={editField}
+                                onStartEdit={handleStartEdit}
+                                onCommitEdit={handleCommitEdit}
+                                onCancelEdit={handleCancelEdit}
+                                onUpdateNotes={handleUpdateNotes}
                             />
                         ))}
 

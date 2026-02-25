@@ -1,6 +1,24 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ScheduleDraft, StripboardStrip } from '@/types';
+import type { ScheduleDraft, StripboardStrip, StripColor } from '@/types';
+import type { IntExt, TimeOfDay } from '@/types';
+
+// -----------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------
+
+function deriveStripColor(intExt: IntExt, timeOfDay: TimeOfDay): StripColor {
+    const nightKeywords: TimeOfDay[] = [
+        'NIGHT', 'NOCHE', 'DAWN', 'DUSK', 'EVENING',
+        'ATARDECER', 'AMANECER', 'MADRUGADA',
+    ];
+    const isNight = nightKeywords.includes(timeOfDay);
+    const isInterior = intExt === 'INT';
+    if (isInterior && !isNight) return 'white';
+    if (!isInterior && !isNight) return 'yellow';
+    if (isInterior && isNight) return 'blue';
+    return 'green';
+}
 
 interface ScheduleState {
     /** Schedules keyed by project ID */
@@ -28,6 +46,18 @@ interface ScheduleState {
     removeDay: (projectId: string, dayId: string) => void;
     /** Nuke the schedule for a project */
     clearSchedule: (projectId: string) => void;
+    /** Update fields on a specific strip (inline editing) */
+    updateStrip: (
+        projectId: string,
+        stripId: string,
+        updates: Partial<Pick<StripboardStrip, 'location' | 'subLocation' | 'notes' | 'intExt' | 'timeOfDay'>>,
+    ) => void;
+    /** Sort strips within each day by a given field */
+    sortStrips: (
+        projectId: string,
+        sortBy: 'sceneNumber' | 'location' | 'intExt' | 'timeOfDay' | 'pageCount',
+        direction: 'asc' | 'desc',
+    ) => void;
 }
 
 function recalcDayPages(strips: StripboardStrip[]): number {
@@ -161,6 +191,82 @@ export const useScheduleStore = create<ScheduleState>()(
                         Object.entries(state.schedules).filter(([key]) => key !== projectId)
                     );
                     return { schedules: rest };
+                }),
+
+            updateStrip: (projectId, stripId, updates) =>
+                set((state) => {
+                    const schedule = state.schedules[projectId];
+                    if (!schedule) return state;
+
+                    const days = schedule.shootDays.map((d) => ({
+                        ...d,
+                        strips: d.strips.map((s) => {
+                            if (s.id !== stripId) return s;
+                            const updated = { ...s, ...updates };
+                            // Recalculate strip color if intExt or timeOfDay changed
+                            if (updates.intExt || updates.timeOfDay) {
+                                updated.stripColor = deriveStripColor(updated.intExt, updated.timeOfDay);
+                            }
+                            return updated;
+                        }),
+                    }));
+
+                    // Recalculate day locations if a strip location changed
+                    if (updates.location) {
+                        for (const day of days) {
+                            day.location = recalcDayLocation(day.strips);
+                        }
+                    }
+
+                    return {
+                        schedules: {
+                            ...state.schedules,
+                            [projectId]: { ...schedule, shootDays: days },
+                        },
+                    };
+                }),
+
+            sortStrips: (projectId, sortBy, direction) =>
+                set((state) => {
+                    const schedule = state.schedules[projectId];
+                    if (!schedule) return state;
+
+                    const compareFn = (a: StripboardStrip, b: StripboardStrip): number => {
+                        let result = 0;
+                        switch (sortBy) {
+                            case 'sceneNumber': {
+                                const numA = parseInt(a.sceneNumber) || 0;
+                                const numB = parseInt(b.sceneNumber) || 0;
+                                result = numA - numB;
+                                break;
+                            }
+                            case 'location':
+                                result = a.location.localeCompare(b.location);
+                                break;
+                            case 'intExt':
+                                result = a.intExt.localeCompare(b.intExt);
+                                break;
+                            case 'timeOfDay':
+                                result = a.timeOfDay.localeCompare(b.timeOfDay);
+                                break;
+                            case 'pageCount':
+                                result = a.pageCount - b.pageCount;
+                                break;
+                        }
+                        return direction === 'desc' ? -result : result;
+                    };
+
+                    const days = schedule.shootDays.map((d) => ({
+                        ...d,
+                        strips: [...d.strips].sort(compareFn),
+                    }));
+
+                    return {
+                        schedules: {
+                            ...state.schedules,
+                            [projectId]: { ...schedule, shootDays: days },
+                        },
+                    };
                 }),
         }),
         { name: 'lemon-budget-schedule' }
