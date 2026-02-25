@@ -1,0 +1,3 @@
+# Public assets — served as-is by Vite
+# Copy logo files from brand/ to this directory:
+# cp brand/lemon-logo-cyan-800x800.png public/

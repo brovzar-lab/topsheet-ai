@@ -1,0 +1,2398 @@
+{
+  "1100 Script": [
+    {
+      "item": "Screenplay (Guión)",
+      "unit": "Flat",
+      "base_cost_mxn": 650000,
+      "notes": "[B1: $500,000 | B2: $800,000 | B3: N/A — no separate screenplay line]"
+    }
+  ],
+  "1200 Producers": [
+    {
+      "item": "Executive Producer",
+      "unit": "Flat",
+      "base_cost_mxn": 1333333.33,
+      "notes": "[B1=B2: $1,500,000 | B3: $1,000,000 per EP]"
+    },
+    {
+      "item": "Line Producer",
+      "unit": "Week",
+      "base_cost_mxn": 36666.67,
+      "notes": "14-16 weeks total (soft pre/pre/shoot/wrap); [B1: $35,000 | B2: $40,000 | B3: $35,000]"
+    }
+  ],
+  "1300 Direction": [
+    {
+      "item": "Director",
+      "unit": "Flat",
+      "base_cost_mxn": 1366666.67,
+      "notes": "[B1: $1,000,000 | B2: $1,500,000 | B3: $1,600,000 (US$80K @20)]"
+    },
+    {
+      "item": "Storyboard Artist",
+      "unit": "Frame",
+      "base_cost_mxn": 190,
+      "notes": "300 frames budgeted; [B1: $180 | B2: $200 | B3: N/A]"
+    },
+    {
+      "item": "Director's Assistant",
+      "unit": "Month",
+      "base_cost_mxn": 35000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Choreographer",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "[NEW from Budget 3] Coreógrafo"
+    },
+    {
+      "item": "Technical Advisor (Chef)",
+      "unit": "Flat",
+      "base_cost_mxn": 50000,
+      "notes": "[NEW from Budget 3]"
+    }
+  ],
+  "1400 Cast": [
+    {
+      "item": "Lead Actor (Estelar) - ANDA Rate",
+      "unit": "Week",
+      "base_cost_mxn": 29119.67,
+      "notes": "ANDA rate; +13% fringes separate; [B1: $29,585 | B2: $29,864 | B3: $27,910]"
+    },
+    {
+      "item": "Lead Actor (Estelar) - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1903.17,
+      "notes": "ANDA OT; [B1: $1,849 | B2: $1,866.50 | B3: $1,994]"
+    },
+    {
+      "item": "Lead Actor (Estelar) - Production Bonus (Top)",
+      "unit": "Flat",
+      "base_cost_mxn": 1333333.33,
+      "notes": "Top-billed lead; [B1: $1,000,000 | B2: $1,500,000 | B3: $1,500,000]"
+    },
+    {
+      "item": "Lead Actor (Estelar) - Production Bonus (2nd/3rd)",
+      "unit": "Flat",
+      "base_cost_mxn": 816666.67,
+      "notes": "[B1: $300,000 | B2: $1,250,000 | B3: $900,000]"
+    },
+    {
+      "item": "Lead Actor (Estelar) - Production Bonus (3rd/4th)",
+      "unit": "Flat",
+      "base_cost_mxn": 825000,
+      "notes": "[B2: $750,000 | B3: $900,000 (SANTI)]"
+    },
+    {
+      "item": "Co-Lead (1a Parte) - ANDA Rate",
+      "unit": "Week",
+      "base_cost_mxn": 22001.67,
+      "notes": "+13% ANDA fringes separate; [B1: $22,353 | B2: $22,564 | B3: $21,088]"
+    },
+    {
+      "item": "Co-Lead (1a Parte) - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1437.75,
+      "notes": "[B1: $1,397 | B2: $1,410.25 | B3: $1,506]"
+    },
+    {
+      "item": "Co-Lead (1a Parte) - Production Bonus",
+      "unit": "Flat",
+      "base_cost_mxn": 378333.33,
+      "notes": "[B1: $200,000 | B2: $400,000 | B3: $535,000 avg ($175K-$1.4M)]"
+    },
+    {
+      "item": "Supporting (2a Parte) - ANDA Rate (Weekly)",
+      "unit": "Week",
+      "base_cost_mxn": 18805.5,
+      "notes": "+13% ANDA fringes separate; [B1=B2 avg: $19,353 | B3: $18,258]"
+    },
+    {
+      "item": "Supporting (2a Parte) - ANDA Rate (Daily)",
+      "unit": "Day",
+      "base_cost_mxn": 9866,
+      "notes": "+13% ANDA fringes separate; [B1: $9,835 | B2: $9,928 | B3: N/A — weekly only]"
+    },
+    {
+      "item": "Supporting (2a Parte) - OT Rate (Weekly)",
+      "unit": "Hour",
+      "base_cost_mxn": 1257,
+      "notes": "[B1=B2: $1,210 | B3: $1,304]"
+    },
+    {
+      "item": "Supporting (2a Parte) - OT Rate (Daily)",
+      "unit": "Hour",
+      "base_cost_mxn": 2470.5,
+      "notes": "[B1: $2,459 | B2: $2,482 | B3: N/A]"
+    },
+    {
+      "item": "Supporting (2a Parte) - Production Bonus (High)",
+      "unit": "Flat",
+      "base_cost_mxn": 131666.67,
+      "notes": "[B1: $100,000 | B2: $150,000 | B3: $145,000]"
+    },
+    {
+      "item": "Supporting (2a Parte) - Production Bonus (Low)",
+      "unit": "Flat",
+      "base_cost_mxn": 60000,
+      "notes": "[B1: $25,000 | B2: $80,000 | B3: $75,000]"
+    },
+    {
+      "item": "Day Player (3a Parte) - ANDA Rate",
+      "unit": "Day",
+      "base_cost_mxn": 8296.67,
+      "notes": "+13% ANDA fringes separate; [B1: $8,429 | B2: $8,509 | B3: $7,952]"
+    },
+    {
+      "item": "Day Player (3a Parte) - ANDA Rate (Weekly)",
+      "unit": "Week",
+      "base_cost_mxn": 15184,
+      "notes": "[NEW from Budget 3] LIBRADO weekly rate"
+    },
+    {
+      "item": "Day Player (3a Parte) - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 2168.75,
+      "notes": "[B1: $2,107 | B2: $2,127.25 | B3: $2,272]"
+    },
+    {
+      "item": "Day Player (3a Parte) - OT Rate (Minor)",
+      "unit": "Hour",
+      "base_cost_mxn": 2810,
+      "notes": "Minor performer rate"
+    },
+    {
+      "item": "Day Player (3a Parte) - Production Bonus (High)",
+      "unit": "Flat",
+      "base_cost_mxn": 56666.67,
+      "notes": "[B1: $50,000 | B2: $20,000 | B3: $100,000]"
+    },
+    {
+      "item": "Day Player (3a Parte) - Production Bonus (Med)",
+      "unit": "Flat",
+      "base_cost_mxn": 18333.33,
+      "notes": "[B1: $25,000 | B2: $15,000 | B3: $15,000]"
+    },
+    {
+      "item": "Day Player (3a Parte) - Production Bonus (Low)",
+      "unit": "Flat",
+      "base_cost_mxn": 8666.67,
+      "notes": "[B1=B2: $10,000 | B3: $6,000]"
+    },
+    {
+      "item": "Bit Part - ANDA Rate",
+      "unit": "Day",
+      "base_cost_mxn": 5069.67,
+      "notes": "+13% ANDA fringes separate; [B1: $5,151 | B2: $5,199 | B3: $4,859]"
+    },
+    {
+      "item": "Bit Part - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1305.92,
+      "notes": "[B1: $1,288 | B2: $1,299.75 | B3: $1,330 avg ($1,214-$1,388)]"
+    },
+    {
+      "item": "Bit Part - Production Bonus",
+      "unit": "Flat",
+      "base_cost_mxn": 13777.67,
+      "notes": "Range 6K-20K; [B1=B2: $15,000 | B3: $11,333 avg]"
+    },
+    {
+      "item": "ANDA Viáticos (Per Diem)",
+      "unit": "Day",
+      "base_cost_mxn": 500.33,
+      "notes": "Standard ANDA per diem; [B1: $505 | B2: $515 | B3: $481]"
+    },
+    {
+      "item": "ANDA Prestaciones Sociales",
+      "unit": "%",
+      "base_cost_mxn": 13,
+      "notes": "Applied on top of ANDA base rates"
+    },
+    {
+      "item": "Stunt Coordinator - Scouting Rate",
+      "unit": "Day",
+      "base_cost_mxn": 24761,
+      "notes": "REVIEW: B2=$45,522/wk scouting; B3=$4,000/day. Units/scope differ significantly. [B2: $45,522/wk | B3: $4,000/day]"
+    },
+    {
+      "item": "Stunt Coordinator - Rehearsal",
+      "unit": "Day",
+      "base_cost_mxn": 12333.33,
+      "notes": "[B1: $12,000 | B2: $13,000 | B3: $12,000]"
+    },
+    {
+      "item": "Stunt Coordinator - ANDA Rate",
+      "unit": "Week",
+      "base_cost_mxn": 34904.67,
+      "notes": "+13% ANDA fringes separate; B3 converted Day→Week: $6,677/day ×6 = $40,062/wk; [B1: $32,174 | B2: $32,478 | B3: $40,062 (conv.)]"
+    },
+    {
+      "item": "Stunt Coordinator - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1982.62,
+      "notes": "[B1: $2,011 | B2: $2,029.87 | B3: $1,907]"
+    },
+    {
+      "item": "Stunt Coordinator - Production Bonus",
+      "unit": "Week",
+      "base_cost_mxn": 35882,
+      "notes": "B3 converted Day→Week: $5,323/day ×6 = $31,938/wk; [B1=B2 avg: $39,826 | B3: $31,938 (conv.)]"
+    },
+    {
+      "item": "Stunt Performer - ANDA Rate",
+      "unit": "Day",
+      "base_cost_mxn": 4643,
+      "notes": "+13% ANDA fringes separate; [B1: $4,717 | B2: $4,762 | B3: $4,450]"
+    },
+    {
+      "item": "Stunt Performer - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1213.5,
+      "notes": "2.5 hrs/day budgeted; [B1: $1,179 | B2: $1,190.50 | B3: $1,271]"
+    },
+    {
+      "item": "Stunt Performer - Viáticos",
+      "unit": "Day",
+      "base_cost_mxn": 500.33,
+      "notes": "[B1: $505 | B2: $515 | B3: $481]"
+    },
+    {
+      "item": "Stunt Performer - Production Bonus",
+      "unit": "Day",
+      "base_cost_mxn": 3666.5,
+      "notes": "[B1=B2 avg: $3,283 | B3: $4,050]"
+    },
+    {
+      "item": "Stunt Performer - Rate (Pre-ANDA)",
+      "unit": "Day",
+      "base_cost_mxn": 4344,
+      "notes": "[B2: $4,238 | B3: $4,450]"
+    },
+    {
+      "item": "Stunt Performer - Rehearsal",
+      "unit": "Day",
+      "base_cost_mxn": 8750,
+      "notes": "[B2: $9,000 | B3: $8,500]"
+    },
+    {
+      "item": "Stunt Adjustment - Fire Burn",
+      "unit": "Flat",
+      "base_cost_mxn": 40000,
+      "notes": null
+    },
+    {
+      "item": "Stunt Adjustment - Fall/Stairs",
+      "unit": "Flat",
+      "base_cost_mxn": 10000,
+      "notes": null
+    },
+    {
+      "item": "Stunt Equipment Rentals",
+      "unit": "Flat",
+      "base_cost_mxn": 40000,
+      "notes": "[B1=B2=B3: $40,000]"
+    },
+    {
+      "item": "Stunt Adjustment - Precision Driving",
+      "unit": "Flat",
+      "base_cost_mxn": 38382,
+      "notes": "[NEW from Budget 3] 3 drivers, ANDA rates + OT + bonus"
+    },
+    {
+      "item": "Voice-Over Performer",
+      "unit": "Day",
+      "base_cost_mxn": 4000,
+      "notes": null
+    },
+    {
+      "item": "Casting Director (All-In Package)",
+      "unit": "Flat",
+      "base_cost_mxn": 333333.33,
+      "notes": "[B1: $250,000 | B2: $350,000 | B3: $400,000]"
+    },
+    {
+      "item": "ANDA Delegate - Rate (Pre)",
+      "unit": "Week",
+      "base_cost_mxn": 17601,
+      "notes": "+13% ANDA fringes separate; [B1: $17,882 | B2: $18,051 | B3: $16,870]"
+    },
+    {
+      "item": "ANDA Delegate - Rate (Shoot)",
+      "unit": "Week",
+      "base_cost_mxn": 17601,
+      "notes": "+13% ANDA fringes separate; [B1: $17,882 | B2: $18,051 | B3: $16,870]"
+    },
+    {
+      "item": "ANDA Delegate - OT Rate",
+      "unit": "Hour",
+      "base_cost_mxn": 1161.5,
+      "notes": "[B1=B2: $1,118 | B3: $1,205]"
+    },
+    {
+      "item": "ANDA Delegate - Viáticos",
+      "unit": "Day",
+      "base_cost_mxn": 493,
+      "notes": "[B1=B2: $505 | B3: $481]"
+    },
+    {
+      "item": "ANDA Script Classification Fee",
+      "unit": "Flat",
+      "base_cost_mxn": 7062,
+      "notes": "[B1: $6,922 | B2: $7,342 | B3: $6,922]"
+    },
+    {
+      "item": "ANDA Filming Fee (Cuota Filmación)",
+      "unit": "Week",
+      "base_cost_mxn": 8497.33,
+      "notes": "[B1: $8,633 | B2: $8,715 | B3: $8,144]"
+    },
+    {
+      "item": "Singing Teacher",
+      "unit": "Flat",
+      "base_cost_mxn": 30000,
+      "notes": "[NEW from Budget 3] Maestro de Canto"
+    },
+    {
+      "item": "Acting Coach (Child)",
+      "unit": "Day",
+      "base_cost_mxn": 5000,
+      "notes": "[NEW from Budget 3] 14 days total"
+    },
+    {
+      "item": "ANDA Foreign Workers Fee",
+      "unit": "Flat",
+      "base_cost_mxn": 26934,
+      "notes": "[NEW from Budget 3] Cuota Extranjeros (3 @$8,978)"
+    },
+    {
+      "item": "ANDA Training Institutes (50%)",
+      "unit": "Flat",
+      "base_cost_mxn": 26667,
+      "notes": "[NEW from Budget 3] Institutos Capacitación ANDA"
+    }
+  ],
+  "1600 ATL Travel": [
+    {
+      "item": "Producer Flights (RT)",
+      "unit": "Unit",
+      "base_cost_mxn": 14000,
+      "notes": "[NEW from Budget 3] 6 RT flights for Ventanarosa producers"
+    },
+    {
+      "item": "Producer Hotel",
+      "unit": "Night",
+      "base_cost_mxn": 5400,
+      "notes": "[NEW from Budget 3] 20 nights"
+    },
+    {
+      "item": "Producer Per Diem",
+      "unit": "Day",
+      "base_cost_mxn": 2000,
+      "notes": "[NEW from Budget 3] US$100/day @20 MXN"
+    }
+  ],
+  "2000 Prod Staff": [
+    {
+      "item": "Unit Production Manager (Gerente de Producción)",
+      "unit": "Week",
+      "base_cost_mxn": 25833.33,
+      "notes": "[B1: $26,500 | B2: $26,000 | B3: $25,000]"
+    },
+    {
+      "item": "Unit Manager (Gerente de Unidad)",
+      "unit": "Week",
+      "base_cost_mxn": 14333.33,
+      "notes": "[B1=B2: $15,000 | B3: $13,000]"
+    },
+    {
+      "item": "1st Assistant Director",
+      "unit": "Week",
+      "base_cost_mxn": 30000,
+      "notes": "[B1=B2=B3: $30,000]"
+    },
+    {
+      "item": "2nd Assistant Director (Key)",
+      "unit": "Week",
+      "base_cost_mxn": 14666.67,
+      "notes": "[B1: $14,000 | B2: $15,000 | B3: $15,000]"
+    },
+    {
+      "item": "2nd 2nd Assistant Director",
+      "unit": "Week",
+      "base_cost_mxn": 8333.33,
+      "notes": "[B1: $8,000 | B2: $8,500 | B3: $8,500]"
+    },
+    {
+      "item": "Script Supervisor",
+      "unit": "Week",
+      "base_cost_mxn": 18500,
+      "notes": "[B1: $17,500 | B2: $20,000 | B3: $18,000]"
+    },
+    {
+      "item": "Production Accountant",
+      "unit": "Week",
+      "base_cost_mxn": 14000,
+      "notes": "[B1=B2=B3: $14,000]"
+    },
+    {
+      "item": "Assistant Production Accountant",
+      "unit": "Week",
+      "base_cost_mxn": 5500,
+      "notes": "[B1=B2=B3: $5,500]"
+    },
+    {
+      "item": "Accounting Clerk (Payroll)",
+      "unit": "Week",
+      "base_cost_mxn": 5166.67,
+      "notes": "[B1: $5,500 | B2: $5,000 | B3: $5,000]"
+    },
+    {
+      "item": "Production Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 23000,
+      "notes": "[B1=B2=B3: $23,000]"
+    },
+    {
+      "item": "APOC",
+      "unit": "Week",
+      "base_cost_mxn": 8000,
+      "notes": "[B1: $8,000 | B2: $8,500 | B3: $7,500]"
+    },
+    {
+      "item": "Office Production Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 6666.67,
+      "notes": "[B1: $6,500 | B2: $7,000 | B3: $6,500]"
+    },
+    {
+      "item": "ANDA Production Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 5666.67,
+      "notes": "[B1: $5,500 | B2: $6,000 | B3: $5,500]"
+    },
+    {
+      "item": "Key Set PA",
+      "unit": "Week",
+      "base_cost_mxn": 8666.67,
+      "notes": "[B1=B2: $9,000 | B3: $8,000]"
+    },
+    {
+      "item": "Set PA",
+      "unit": "Week",
+      "base_cost_mxn": 7666.67,
+      "notes": "[B1=B2: $8,000 | B3: $7,000]"
+    },
+    {
+      "item": "Per Diem - Office Staff (Pre)",
+      "unit": "Day",
+      "base_cost_mxn": 93.33,
+      "notes": "18 persons budgeted; [B1=B2: $100 | B3: $80]"
+    },
+    {
+      "item": "Per Diem - Office Staff (Shoot)",
+      "unit": "Day",
+      "base_cost_mxn": 93.33,
+      "notes": "24 persons budgeted; [B1=B2: $100 | B3: $80]"
+    },
+    {
+      "item": "Trainee / Runner",
+      "unit": "Week",
+      "base_cost_mxn": 3250,
+      "notes": "[B1: $3,000 | B2: $3,500 | B3: N/A]"
+    },
+    {
+      "item": "Misc Production Expenses",
+      "unit": "Week",
+      "base_cost_mxn": 12333.33,
+      "notes": "[B1: $10,000 | B2: $15,000 | B3: $12,000]"
+    },
+    {
+      "item": "Board Breakdown / Budget Prep (PDT)",
+      "unit": "Flat",
+      "base_cost_mxn": 40000,
+      "notes": "[NEW from Budget 3] Elaboración de PDT"
+    }
+  ],
+  "2100 Extras": [
+    {
+      "item": "Extra - Standard (Human)",
+      "unit": "Unit/Day",
+      "base_cost_mxn": 1040,
+      "notes": "Non-union; [B1: $860 | B2: $1,300 | B3: $960]"
+    },
+    {
+      "item": "Extra - FX/Costumed (Zombie)",
+      "unit": "Unit/Day",
+      "base_cost_mxn": 1230,
+      "notes": "Non-union; requires makeup; [B1=B2=B3: $1,230]"
+    },
+    {
+      "item": "Extra - Special",
+      "unit": "Unit/Day",
+      "base_cost_mxn": 1510,
+      "notes": "Non-union; [B1: $1,800 | B2: $1,500 | B3: $1,230]"
+    },
+    {
+      "item": "Extras Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 9333.33,
+      "notes": "[B1: $9,000 | B2: $10,000 | B3: $9,000]"
+    },
+    {
+      "item": "Stand-In",
+      "unit": "Day",
+      "base_cost_mxn": 1300,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Extra - Recurrent/Background",
+      "unit": "Day",
+      "base_cost_mxn": 950,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Extras Coordinator Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 7000,
+      "notes": "[B2: $8,000 | B3: $6,000]"
+    }
+  ],
+  "2200 Set Design": [
+    {
+      "item": "Production Designer",
+      "unit": "Week",
+      "base_cost_mxn": 45000,
+      "notes": "[B1: $40,000 | B2: $45,000 | B3: $50,000]"
+    },
+    {
+      "item": "Art Director",
+      "unit": "Week",
+      "base_cost_mxn": 30000,
+      "notes": "[NEW from Budget 3] Director de Arte"
+    },
+    {
+      "item": "Set Designer / Draftsman",
+      "unit": "Week",
+      "base_cost_mxn": 13000,
+      "notes": "[B1: $14,000 | B2: $12,000 | B3: N/A]"
+    },
+    {
+      "item": "Art Department Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 17000,
+      "notes": "[B1: $16,000 | B2: $17,000 | B3: $18,000]"
+    },
+    {
+      "item": "Art Dept Coordinator Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 9000,
+      "notes": "[B1: $8,000 | B2: $9,000 | B3: $10,000]"
+    },
+    {
+      "item": "Graphic Designer",
+      "unit": "Week",
+      "base_cost_mxn": 11333.33,
+      "notes": "[B1=B2: $12,000 | B3: $10,000]"
+    },
+    {
+      "item": "Art Dept Office - Phone/Internet",
+      "unit": "Flat",
+      "base_cost_mxn": 3450,
+      "notes": "[B1=B2: $4,500 | B3: $2,400]"
+    },
+    {
+      "item": "Art Dept Office - Taxis",
+      "unit": "Flat",
+      "base_cost_mxn": 13000,
+      "notes": "[B1=B2: $15,000 | B3: $11,000]"
+    },
+    {
+      "item": "Art Dept Office - Misc",
+      "unit": "Flat",
+      "base_cost_mxn": 22500,
+      "notes": "[B1=B2: $20,000 | B3: $25,000]"
+    },
+    {
+      "item": "Expendables - Office Supplies",
+      "unit": "Flat",
+      "base_cost_mxn": 19333.33,
+      "notes": "B3: $8,000 (recolección basura); [B1: $15,000 | B2: $35,000 | B3: $8,000]"
+    },
+    {
+      "item": "Assistant Graphic Designer",
+      "unit": "Week",
+      "base_cost_mxn": 9000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Assistant Production Designer",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "2300 Construction": [
+    {
+      "item": "Construction Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 13333.33,
+      "notes": "[B1: $12,000 | B2: $15,000 | B3: $13,000]"
+    },
+    {
+      "item": "Scenic Artist (Pintor Escénico)",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Carpenter",
+      "unit": "Week",
+      "base_cost_mxn": 8333.33,
+      "notes": "[B1: $8,000 | B2: $9,000 | B3: $8,000]"
+    },
+    {
+      "item": "Painter",
+      "unit": "Week",
+      "base_cost_mxn": 8333.33,
+      "notes": "[B1: $8,000 | B2: $9,000 | B3: $8,000]"
+    },
+    {
+      "item": "Construction Materials",
+      "unit": "Flat",
+      "base_cost_mxn": 675000,
+      "notes": "REVIEW: Scope differs widely. [B1: $250,000 | B2: $1,525,000 (supermarket sets) | B3: $250,000 (Navidad puestos)]"
+    },
+    {
+      "item": "Expendables - Construction",
+      "unit": "Flat",
+      "base_cost_mxn": 35000,
+      "notes": "[B1: $25,000 | B2: $50,000 | B3: $30,000]"
+    },
+    {
+      "item": "General Foreman (Capataz)",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Paint Foreman",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Construction Medic",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Construction Buyer",
+      "unit": "Week",
+      "base_cost_mxn": 7000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Warehouse Keeper (Construction)",
+      "unit": "Week",
+      "base_cost_mxn": 7000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Workshop/Warehouse Rent",
+      "unit": "Month",
+      "base_cost_mxn": 20000,
+      "notes": "[B2=B3: $20,000]"
+    },
+    {
+      "item": "Greens Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 100000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Construction Equipment Rental",
+      "unit": "Flat",
+      "base_cost_mxn": 40000,
+      "notes": "[NEW from Budget 3] Grúas, trusses, herramientas"
+    }
+  ],
+  "2400 Set Dressing": [
+    {
+      "item": "Set Decorator",
+      "unit": "Week",
+      "base_cost_mxn": 16666.67,
+      "notes": "[B1: $18,000 | B2: $17,000 | B3: $15,000]"
+    },
+    {
+      "item": "Assistant Set Decorator",
+      "unit": "Week",
+      "base_cost_mxn": 8500,
+      "notes": "[B2: $9,000 | B3: $8,000]"
+    },
+    {
+      "item": "Leadman",
+      "unit": "Week",
+      "base_cost_mxn": 11333.33,
+      "notes": "[B1=B2: $12,000 | B3: $10,000]"
+    },
+    {
+      "item": "Swing Gang Member",
+      "unit": "Week",
+      "base_cost_mxn": 8833.33,
+      "notes": "[B1=B2: $9,000 | B3: $8,500]"
+    },
+    {
+      "item": "Buyer (Set Dressing)",
+      "unit": "Week",
+      "base_cost_mxn": 8000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "On-Set Dresser",
+      "unit": "Week",
+      "base_cost_mxn": 10666.67,
+      "notes": "[B1: $10,000 | B2: $12,000 | B3: $10,000]"
+    },
+    {
+      "item": "Assistant On-Set Dresser",
+      "unit": "Week",
+      "base_cost_mxn": 9000,
+      "notes": "[B1: $9,000 | B2: $9,500 | B3: $8,500]"
+    },
+    {
+      "item": "Additional Dressing Labor",
+      "unit": "Flat",
+      "base_cost_mxn": 30000,
+      "notes": "Allowance"
+    },
+    {
+      "item": "Graphics & Prints (Manufacturing)",
+      "unit": "Flat",
+      "base_cost_mxn": 112500,
+      "notes": "[B1=B2: $75,000 | B3: $150,000]"
+    },
+    {
+      "item": "Expendables - Decoration",
+      "unit": "Flat",
+      "base_cost_mxn": 35000,
+      "notes": "[B1: $25,000 | B2: $50,000 | B3: $30,000]"
+    },
+    {
+      "item": "Decoration Rentals",
+      "unit": "Flat",
+      "base_cost_mxn": 225000,
+      "notes": "[B1=B2: $250,000 | B3: $200,000]"
+    },
+    {
+      "item": "Decoration Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 675000,
+      "notes": "[B1=B2: $500,000 | B3: $850,000]"
+    },
+    {
+      "item": "Warehouse / Workshop / Art Office",
+      "unit": "Month",
+      "base_cost_mxn": 25000,
+      "notes": "[B1: $30,000 | B2: $20,000 | B3: $25,000]"
+    },
+    {
+      "item": "Warehouse Keeper (Bodeguero)",
+      "unit": "Week",
+      "base_cost_mxn": 6250,
+      "notes": "[B1=B2: $6,000 | B3: $6,500]"
+    },
+    {
+      "item": "Loss & Damage - Decoration",
+      "unit": "Flat",
+      "base_cost_mxn": 21666.67,
+      "notes": "[B1: $20,000 | B2: $25,000 | B3: $20,000]"
+    }
+  ],
+  "2500 Property": [
+    {
+      "item": "Propmaster",
+      "unit": "Week",
+      "base_cost_mxn": 15666.67,
+      "notes": "[B1: $16,000 | B2: $18,000 | B3: $13,000]"
+    },
+    {
+      "item": "Assistant Propmaster",
+      "unit": "Week",
+      "base_cost_mxn": 9666.67,
+      "notes": "[B1: $9,000 | B2: $12,000 | B3: $8,000]"
+    },
+    {
+      "item": "Props On-Set Person",
+      "unit": "Week",
+      "base_cost_mxn": 8000,
+      "notes": "[B1=B2=B3: $8,000]"
+    },
+    {
+      "item": "Additional Props Labor",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "Allowance"
+    },
+    {
+      "item": "Food Stylist (Economo)",
+      "unit": "Day",
+      "base_cost_mxn": 8000,
+      "notes": "[NEW from Budget 3] 6 days"
+    },
+    {
+      "item": "Dummy/Mannequin Manufacturing",
+      "unit": "Flat",
+      "base_cost_mxn": 100000,
+      "notes": "[B1: $50,000 | B2: $150,000 | B3: N/A]"
+    },
+    {
+      "item": "Food Props",
+      "unit": "Flat",
+      "base_cost_mxn": 23333.33,
+      "notes": "[B1: $5,000 | B2: $35,000 | B3: $30,000]"
+    },
+    {
+      "item": "Props Rentals",
+      "unit": "Flat",
+      "base_cost_mxn": 38333.33,
+      "notes": "[B1: $30,000 | B2: $70,000 | B3: $15,000]"
+    },
+    {
+      "item": "Props Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 146666.67,
+      "notes": "[B1: $125,000 | B2: $150,000 | B3: $165,000]"
+    },
+    {
+      "item": "Loss & Damage - Props",
+      "unit": "Flat",
+      "base_cost_mxn": 10000,
+      "notes": "[B1=B2=B3: $10,000]"
+    }
+  ],
+  "2600 Vehicles/Animals": [
+    {
+      "item": "Picture Car - Compact (incl. commission)",
+      "unit": "Day",
+      "base_cost_mxn": 4625,
+      "notes": "[B1=B2: $2,250 | B3: $7,000 (Combi Valeria, named vehicle)]"
+    },
+    {
+      "item": "Picture Car - ND/Background (incl. commission)",
+      "unit": "Unit",
+      "base_cost_mxn": 3875,
+      "notes": "[B1=B2: $2,250 | B3: $5,500]"
+    },
+    {
+      "item": "Picture Car - Patrol",
+      "unit": "Day",
+      "base_cost_mxn": 10500,
+      "notes": "[NEW from Budget 3] 4 units ×1 day"
+    },
+    {
+      "item": "Animal - Small Dog (incl. wrangler)",
+      "unit": "Day",
+      "base_cost_mxn": 9500,
+      "notes": "[B1=B2: $9,000 | B3: $10,000 (Perro \"José Arcadio\")]"
+    },
+    {
+      "item": "Animal - Hummingbird",
+      "unit": "Day",
+      "base_cost_mxn": 8000,
+      "notes": null
+    },
+    {
+      "item": "Loss & Damage - Vehicles",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": "[NEW from Budget 3]"
+    }
+  ],
+  "2700 Wardrobe": [
+    {
+      "item": "Costume Designer",
+      "unit": "Week",
+      "base_cost_mxn": 24000,
+      "notes": "[B1=B2: $23,000 | B3: $25,000]"
+    },
+    {
+      "item": "Costume Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 3] Coordinador de Vestuario"
+    },
+    {
+      "item": "Costume Supervisor",
+      "unit": "Week",
+      "base_cost_mxn": 12500,
+      "notes": "[B1=B2: $13,000 | B3: $12,000]"
+    },
+    {
+      "item": "Costume Buyer/Admin",
+      "unit": "Week",
+      "base_cost_mxn": 6000,
+      "notes": null
+    },
+    {
+      "item": "Key Costumer",
+      "unit": "Week",
+      "base_cost_mxn": 10000,
+      "notes": "[B1=B2: $11,000 | B3: $9,000]"
+    },
+    {
+      "item": "Set Costumer",
+      "unit": "Week",
+      "base_cost_mxn": 8250,
+      "notes": "[B1=B2: $8,500 | B3: $8,000]"
+    },
+    {
+      "item": "Tailor (Sastre)",
+      "unit": "Week",
+      "base_cost_mxn": 10000,
+      "notes": "[NEW from Budget 3] 8 weeks total"
+    },
+    {
+      "item": "Additional Wardrobe Labor (Day Call)",
+      "unit": "Day",
+      "base_cost_mxn": 1250,
+      "notes": "[B1=B2: $1,500 | B3: $1,000 (man-days)]"
+    },
+    {
+      "item": "Manufacturing Materials",
+      "unit": "Flat",
+      "base_cost_mxn": 61666.67,
+      "notes": "[B1: $45,000 | B2: $60,000 | B3: $80,000 (Santa costumes)]"
+    },
+    {
+      "item": "Laundry & Dry Cleaning",
+      "unit": "Flat",
+      "base_cost_mxn": 18333.33,
+      "notes": "[B1: $15,000 | B2: $30,000 | B3: $10,000]"
+    },
+    {
+      "item": "Wardrobe Rentals",
+      "unit": "Flat",
+      "base_cost_mxn": 90000,
+      "notes": "[B1=B2: $100,000 | B3: $80,000]"
+    },
+    {
+      "item": "Wardrobe Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 225000,
+      "notes": "[B1=B2: $100,000 | B3: $350,000]"
+    },
+    {
+      "item": "Wardrobe Office/Warehouse",
+      "unit": "Month",
+      "base_cost_mxn": 23333.33,
+      "notes": "[B1: $20,000 | B2: $25,000 | B3: $25,000]"
+    },
+    {
+      "item": "Loss & Damage - Wardrobe",
+      "unit": "Flat",
+      "base_cost_mxn": 10000,
+      "notes": "[NEW from Budget 3]"
+    }
+  ],
+  "2800 Makeup/Hair": [
+    {
+      "item": "Key Makeup Artist / FX Makeup Designer",
+      "unit": "Week",
+      "base_cost_mxn": 25000,
+      "notes": "[B1=B2=B3: $25,000]"
+    },
+    {
+      "item": "Head Makeup Artist",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Assistant Makeup Artist",
+      "unit": "Week",
+      "base_cost_mxn": 9500,
+      "notes": "[B1=B2: $9,000 | B3: $10,000]"
+    },
+    {
+      "item": "Additional Makeup Labor",
+      "unit": "Day",
+      "base_cost_mxn": 1500,
+      "notes": "[NEW from Budget 3] Man-days"
+    },
+    {
+      "item": "Key Hair Stylist",
+      "unit": "Week",
+      "base_cost_mxn": 13000,
+      "notes": "[B1=B2: $12,000 | B3: $14,000]"
+    },
+    {
+      "item": "Assistant Hair Stylist",
+      "unit": "Week",
+      "base_cost_mxn": 8000,
+      "notes": "[B1=B2=B3: $8,000]"
+    },
+    {
+      "item": "Head FX/Prosthetics Artist",
+      "unit": "Week",
+      "base_cost_mxn": 14000,
+      "notes": null
+    },
+    {
+      "item": "Workshop Supervisor (Prosthetics)",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": null
+    },
+    {
+      "item": "Workshop Coordinator (Prosthetics)",
+      "unit": "Week",
+      "base_cost_mxn": 10000,
+      "notes": null
+    },
+    {
+      "item": "FX Makeup Materials",
+      "unit": "Flat",
+      "base_cost_mxn": 190000,
+      "notes": "N/A in B3 (no FX makeup); [B1: $80,000 | B2: $300,000]"
+    },
+    {
+      "item": "Workshop Materials/Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 100000,
+      "notes": null
+    },
+    {
+      "item": "Expendables - H&MU General",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "[B1: $15,000 | B2: $25,000 | B3: N/A]"
+    },
+    {
+      "item": "Expendables - Standard FX (per 10 extras)",
+      "unit": "Unit/10",
+      "base_cost_mxn": 4000,
+      "notes": "15 units budgeted"
+    },
+    {
+      "item": "Expendables - Advanced FX (per 10 extras)",
+      "unit": "Unit/10",
+      "base_cost_mxn": 33000,
+      "notes": "Zeroed out"
+    },
+    {
+      "item": "Expendables - Pro FX (per 10 extras)",
+      "unit": "Unit/10",
+      "base_cost_mxn": 61000,
+      "notes": "Zeroed out"
+    },
+    {
+      "item": "Workshop Rent/Operating Costs",
+      "unit": "Month",
+      "base_cost_mxn": 15825,
+      "notes": "[B1: $10,000 | B2: $21,650] B2 conv. Wk→Mo; B3: N/A (no FX workshop)"
+    },
+    {
+      "item": "Makeup/Hair Purchases",
+      "unit": "Flat",
+      "base_cost_mxn": 43333.33,
+      "notes": "[B1: $25,000 | B2: $45,000 | B3: $60,000 ($30K MU + $30K Hair)]"
+    },
+    {
+      "item": "Wigs/Hairpieces",
+      "unit": "Flat",
+      "base_cost_mxn": 27500,
+      "notes": "[B2: $35,000 | B3: $20,000]"
+    }
+  ],
+  "2900 Set Ops": [
+    {
+      "item": "Key Grip",
+      "unit": "Week",
+      "base_cost_mxn": 17000,
+      "notes": "[B1=B2=B3: $17,000]"
+    },
+    {
+      "item": "Grip",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Dolly Grip",
+      "unit": "Week",
+      "base_cost_mxn": 15666.67,
+      "notes": "[B1: $15,000 | B2: $16,000 | B3: $16,000]"
+    },
+    {
+      "item": "Rigger",
+      "unit": "Man-Day",
+      "base_cost_mxn": 2750,
+      "notes": "[B1=B2: $3,000 | B3: $2,500]"
+    },
+    {
+      "item": "Crane Operator (Encargado)",
+      "unit": "Day",
+      "base_cost_mxn": 3130,
+      "notes": "Flat rate; [B1: $3,450 | B2: $2,700 | B3: $3,240]"
+    },
+    {
+      "item": "Crane Assistant",
+      "unit": "Day",
+      "base_cost_mxn": 2433.33,
+      "notes": "Flat rate; [B1: $2,500 | B2: $2,300 | B3: $2,500]"
+    },
+    {
+      "item": "Stabilized Head Operator",
+      "unit": "Day",
+      "base_cost_mxn": 4030,
+      "notes": "Flat rate; [B1: $3,450 | B2: $4,500 | B3: $4,140]"
+    },
+    {
+      "item": "Set Medic",
+      "unit": "Week",
+      "base_cost_mxn": 13000,
+      "notes": "[B1: $14,000 | B2: $12,000 | B3: N/A (separate COVID medic)]"
+    },
+    {
+      "item": "First Aid Supplies",
+      "unit": "Flat",
+      "base_cost_mxn": 10333.33,
+      "notes": "[B1: $6,000 | B2: $15,000 | B3: $10,000]"
+    },
+    {
+      "item": "Camera Mounts / Special Rigs",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "[NEW from Budget 3] Car rigs, rickshaw, Ronin"
+    },
+    {
+      "item": "Expendables - Grip",
+      "unit": "Flat",
+      "base_cost_mxn": 51666.67,
+      "notes": "[B1: $45,000 | B2: $50,000 | B3: $60,000]"
+    },
+    {
+      "item": "Box Rentals - Grip",
+      "unit": "Week",
+      "base_cost_mxn": 9833.33,
+      "notes": "[B1: $7,500 | B2: $12,000 | B3: $10,000]"
+    },
+    {
+      "item": "Special Equipment Rentals (Genies, Condors)",
+      "unit": "Flat",
+      "base_cost_mxn": 45000,
+      "notes": "[B1: $40,000 | B2: $50,000 | B3: $45,000]"
+    },
+    {
+      "item": "Loss & Damage - Grip",
+      "unit": "Flat",
+      "base_cost_mxn": 16666.67,
+      "notes": "[B1=B2: $15,000 | B3: $20,000]"
+    }
+  ],
+  "3000 Electrical": [
+    {
+      "item": "Gaffer",
+      "unit": "Week",
+      "base_cost_mxn": 25000,
+      "notes": "[B1=B2=B3: $25,000]"
+    },
+    {
+      "item": "Best Boy Electric",
+      "unit": "Week",
+      "base_cost_mxn": 17000,
+      "notes": "[B1=B2=B3: $17,000]"
+    },
+    {
+      "item": "Electrician",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Generator Operator (Plantero)",
+      "unit": "Week",
+      "base_cost_mxn": 11166.67,
+      "notes": "[B1: $11,000 | B2: $11,500 | B3: $11,000]"
+    },
+    {
+      "item": "Mobile Unit Operator (Encargado Móvil)",
+      "unit": "Week",
+      "base_cost_mxn": 13166.67,
+      "notes": "[B1: $13,000 | B2: $13,500 | B3: $13,000]"
+    },
+    {
+      "item": "Mini-Mobile Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[B1=B2: $13,000 | B3: $11,000]"
+    },
+    {
+      "item": "Astera Operator",
+      "unit": "Week",
+      "base_cost_mxn": 12000,
+      "notes": "[NEW from Budget 3] Encargado Asteras"
+    },
+    {
+      "item": "HMI Operator",
+      "unit": "Week",
+      "base_cost_mxn": 11750,
+      "notes": "[B1: $11,500 | B2: $12,000 | B3: N/A (absorbed into electric team)]"
+    },
+    {
+      "item": "Sky Panel Operator",
+      "unit": "Week",
+      "base_cost_mxn": 11833.33,
+      "notes": "[B1: $11,500 | B2: $12,000 | B3: $12,000]"
+    },
+    {
+      "item": "Expendables - Electric",
+      "unit": "Flat",
+      "base_cost_mxn": 51666.67,
+      "notes": "[B1: $45,000 | B2: $50,000 | B3: $60,000]"
+    },
+    {
+      "item": "Box Rentals - Electric",
+      "unit": "Week",
+      "base_cost_mxn": 9833.33,
+      "notes": "[B1: $7,500 | B2: $12,000 | B3: $10,000]"
+    },
+    {
+      "item": "Loss & Damage - Electric",
+      "unit": "Flat",
+      "base_cost_mxn": 16666.67,
+      "notes": "[B1=B2: $15,000 | B3: $20,000]"
+    }
+  ],
+  "3100 Camera": [
+    {
+      "item": "Director of Photography / A-Cam Operator",
+      "unit": "Week",
+      "base_cost_mxn": 52500,
+      "notes": "Includes post (CC) weeks; [B1=B2: $45,000 | B3: $60,000]"
+    },
+    {
+      "item": "B-Camera Operator",
+      "unit": "Day",
+      "base_cost_mxn": 4833.33,
+      "notes": "[B1: $5,000 | B2: $5,000 (conv.) | B3: $4,500]"
+    },
+    {
+      "item": "1st AC (A-Cam)",
+      "unit": "Week",
+      "base_cost_mxn": 22500,
+      "notes": "[B1=B2: $23,000 | B3: $22,000]"
+    },
+    {
+      "item": "1st AC (B-Cam)",
+      "unit": "Day",
+      "base_cost_mxn": 4166.67,
+      "notes": "[B1: $4,500 | B2: $4,000 (conv.) | B3: $4,000]"
+    },
+    {
+      "item": "2nd AC (A-Cam)",
+      "unit": "Week",
+      "base_cost_mxn": 18000,
+      "notes": "[B1=B2=B3: $18,000]"
+    },
+    {
+      "item": "2nd AC (B-Cam)",
+      "unit": "Day",
+      "base_cost_mxn": 3300,
+      "notes": "[B1: $3,450 | B2: $3,000 (conv.) | B3: $3,450]"
+    },
+    {
+      "item": "Data Manager / Loader",
+      "unit": "Week",
+      "base_cost_mxn": 13000,
+      "notes": "[B1=B2: $12,000 | B3: $14,000]"
+    },
+    {
+      "item": "DIT",
+      "unit": "Week",
+      "base_cost_mxn": 18000,
+      "notes": "[B1=B2=B3: $18,000]"
+    },
+    {
+      "item": "Still Photographer",
+      "unit": "Day",
+      "base_cost_mxn": 3500,
+      "notes": "[B1=B2=B3: $3,500]"
+    },
+    {
+      "item": "Steadicam Operator (incl. equipment)",
+      "unit": "Day",
+      "base_cost_mxn": 19000,
+      "notes": "REVIEW: Wide range. [B1: $23,000 | B2: $10,000 (conv.) | B3: $24,000]"
+    },
+    {
+      "item": "Expendables - Camera/Data/DIT",
+      "unit": "Flat",
+      "base_cost_mxn": 70000,
+      "notes": "[B1: $50,000 | B2: $80,000 | B3: $80,000]"
+    },
+    {
+      "item": "Box Rentals - Camera",
+      "unit": "Week",
+      "base_cost_mxn": 13333.33,
+      "notes": "[B1: $10,000 | B2: $20,000 | B3: $10,000]"
+    },
+    {
+      "item": "Data Cart Equipment Rental",
+      "unit": "Week",
+      "base_cost_mxn": 13000,
+      "notes": "[B1=B2: $12,000 | B3: $14,000]"
+    },
+    {
+      "item": "DIT Cart Equipment Rental",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Camera & Lighting Package (All-In)",
+      "unit": "Week",
+      "base_cost_mxn": 335000,
+      "notes": "[B1=B2: $320,000 | B3: $350,000 (Alexa Mini LF, Primes, Asteras, HMI, Dolly, Planta)]"
+    },
+    {
+      "item": "Special Equipment Rental (All-In)",
+      "unit": "Flat",
+      "base_cost_mxn": 430000,
+      "notes": "[B1=B2: $300,000 | B3: $560,000 (incl. Camera Car/Polaris $150K, DMX $60K)]"
+    },
+    {
+      "item": "Loss & Damage - Camera",
+      "unit": "Flat",
+      "base_cost_mxn": 33333.33,
+      "notes": "[B1=B2: $25,000 | B3: $50,000]"
+    }
+  ],
+  "3200 Sound": [
+    {
+      "item": "Production Sound Mixer",
+      "unit": "Week",
+      "base_cost_mxn": 20000,
+      "notes": "[B1=B2=B3: $20,000]"
+    },
+    {
+      "item": "Boom Operator",
+      "unit": "Week",
+      "base_cost_mxn": 13500,
+      "notes": "[B1=B2: $13,000 | B3: $14,000]"
+    },
+    {
+      "item": "Cable Person (Sound)",
+      "unit": "Week",
+      "base_cost_mxn": 8500,
+      "notes": "[B1=B2: $9,000 | B3: $8,000]"
+    },
+    {
+      "item": "Video Assist Operator",
+      "unit": "Week",
+      "base_cost_mxn": 11500,
+      "notes": "[B1=B2: $12,000 | B3: $11,000]"
+    },
+    {
+      "item": "Video Assist Cable Person",
+      "unit": "Week",
+      "base_cost_mxn": 6500,
+      "notes": "[B1=B2: $7,000 | B3: $6,000]"
+    },
+    {
+      "item": "Video Assist Equipment (VTR) Rental",
+      "unit": "Week",
+      "base_cost_mxn": 18500,
+      "notes": "[B1=B2: $17,000 | B3: $20,000]"
+    },
+    {
+      "item": "Expendables - Sound/Video Assist",
+      "unit": "Flat",
+      "base_cost_mxn": 18333.33,
+      "notes": "[B1=B2: $15,000 | B3: $25,000]"
+    },
+    {
+      "item": "Walkie-Talkie Rental (per unit)",
+      "unit": "Week",
+      "base_cost_mxn": 160,
+      "notes": "60-65 units budgeted; [B1: $150 | B2: $180 | B3: $150]"
+    },
+    {
+      "item": "Sound Equipment Rental Package",
+      "unit": "Week",
+      "base_cost_mxn": 20500,
+      "notes": "[B1=B2: $21,000 | B3: $20,000]"
+    },
+    {
+      "item": "Additional Video Assist Equipment",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2: $20,000 | B3: $10,000]"
+    },
+    {
+      "item": "Additional Sound Equipment",
+      "unit": "Flat",
+      "base_cost_mxn": 11666.67,
+      "notes": "[B1: $10,000 | B2: $15,000 | B3: $10,000]"
+    },
+    {
+      "item": "Loss & Damage - Sound",
+      "unit": "Flat",
+      "base_cost_mxn": 8333.33,
+      "notes": "[B1: $10,000 | B2: $5,000 | B3: $10,000]"
+    }
+  ],
+  "3300 SFX": [
+    {
+      "item": "SFX Package (All-In)",
+      "unit": "Flat",
+      "base_cost_mxn": 225000,
+      "notes": "Includes supervisor, crew, materials; [B1=B2: $350,000 | B3: $100,000 (fireworks/smoke only)]"
+    },
+    {
+      "item": "SFX Supervisor",
+      "unit": "Day",
+      "base_cost_mxn": 7000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "SFX Assistant",
+      "unit": "Day",
+      "base_cost_mxn": 3500,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "SFX Materials/Manufacturing",
+      "unit": "Flat",
+      "base_cost_mxn": 450000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "3400 Locations": [
+    {
+      "item": "Location Survey Expenses (Scouting)",
+      "unit": "Flat",
+      "base_cost_mxn": 46666.67,
+      "notes": "[B1: $40,000 | B2: $50,000 | B3: $50,000]"
+    },
+    {
+      "item": "Location Manager",
+      "unit": "Week",
+      "base_cost_mxn": 20000,
+      "notes": "[B1=B2=B3: $20,000]"
+    },
+    {
+      "item": "Location Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 11500,
+      "notes": "[B1=B2: $12,000 | B3: $11,000]"
+    },
+    {
+      "item": "Location Scout",
+      "unit": "Week",
+      "base_cost_mxn": 9500,
+      "notes": "[B1=B2: $10,000 | B3: $9,000]"
+    },
+    {
+      "item": "Police Escort / Patrol",
+      "unit": "Day",
+      "base_cost_mxn": 6550,
+      "notes": "[B1: $7,605 | B2: $4,800 | B3: $7,245]"
+    },
+    {
+      "item": "Fire Truck (Bomberos)",
+      "unit": "Day",
+      "base_cost_mxn": 12500,
+      "notes": null
+    },
+    {
+      "item": "Security Chief",
+      "unit": "Day",
+      "base_cost_mxn": 900,
+      "notes": "[B1=B2: $950 | B3: $850]"
+    },
+    {
+      "item": "Security Guard",
+      "unit": "Day",
+      "base_cost_mxn": 800,
+      "notes": "5 guards budgeted; [B1=B2: $850 | B3: $750]"
+    },
+    {
+      "item": "Security OT Allowance",
+      "unit": "%",
+      "base_cost_mxn": 25,
+      "notes": "On base security costs; [B1=B2: 20% | B3: 30%]"
+    },
+    {
+      "item": "Security Viáticos",
+      "unit": "Day",
+      "base_cost_mxn": 85,
+      "notes": "Per guard per day; [B1=B2: $100 | B3: $70]"
+    },
+    {
+      "item": "Ambulance",
+      "unit": "Day",
+      "base_cost_mxn": 6333.33,
+      "notes": "[B1: $5,000 | B2: $6,500 | B3: $7,500]"
+    },
+    {
+      "item": "Catering - Pre-production (Crew)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 350,
+      "notes": "Meals + snacks + craft; [B1: $400 | B2: $350 | B3: $300 (40 crew)]"
+    },
+    {
+      "item": "Catering - Breakfast (Crew)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 110,
+      "notes": "95-105 crew; [B1=B2: $120 | B3: $100]"
+    },
+    {
+      "item": "Catering - Lunch (Crew)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 130,
+      "notes": "[B1=B2=B3: $130]"
+    },
+    {
+      "item": "Catering - Craft Services (Crew)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 75,
+      "notes": "[B1=B2: $70 | B3: $80]"
+    },
+    {
+      "item": "Catering - Afternoon Snack (Crew)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 110,
+      "notes": "[B1=B2: $130 | B3: $90]"
+    },
+    {
+      "item": "Catering - Extras (Full Day)",
+      "unit": "Unit/Person",
+      "base_cost_mxn": 425,
+      "notes": "Breakfast + lunch + snacks; [B1=B2: $450 | B3: $400]"
+    },
+    {
+      "item": "Location Rental - Public Park / Plaza Permit",
+      "unit": "Day",
+      "base_cost_mxn": 50000,
+      "notes": "[NEW from Budget 3] Alameda Central"
+    },
+    {
+      "item": "Location Rental - Park Look-Alike",
+      "unit": "Day",
+      "base_cost_mxn": 25000,
+      "notes": "[NEW from Budget 3] Alameda \"look alike\""
+    },
+    {
+      "item": "Location Rental - Large House (Principal)",
+      "unit": "Day",
+      "base_cost_mxn": 60000,
+      "notes": "[NEW from Budget 3] Casa Carmela (21 days incl setup/wrap)"
+    },
+    {
+      "item": "Location Rental - Medium House",
+      "unit": "Day",
+      "base_cost_mxn": 50000,
+      "notes": "Avg of B1=B2 restaurant kitchen & B3 Casa Monse; [B1=B2: $50,000 | B3: $50,000]"
+    },
+    {
+      "item": "Location Rental - Premium House",
+      "unit": "Day",
+      "base_cost_mxn": 70000,
+      "notes": "[NEW from Budget 3] Casa Valeria"
+    },
+    {
+      "item": "Location Rental - Kitchen/Cocina",
+      "unit": "Day",
+      "base_cost_mxn": 40000,
+      "notes": "[B1=B2: $50,000 (restaurant) | B3: $30,000 (Cocina Valeria)]"
+    },
+    {
+      "item": "Location Rental - Apartment Interior",
+      "unit": "Day",
+      "base_cost_mxn": 30000,
+      "notes": null
+    },
+    {
+      "item": "Location Rental - Building Common Areas",
+      "unit": "Day",
+      "base_cost_mxn": 45000,
+      "notes": null
+    },
+    {
+      "item": "Location Rental - TV Studio",
+      "unit": "Day",
+      "base_cost_mxn": 35000,
+      "notes": null
+    },
+    {
+      "item": "Location Rental - Small Room/Bedroom",
+      "unit": "Day",
+      "base_cost_mxn": 15000,
+      "notes": null
+    },
+    {
+      "item": "Location Rental - Mercado",
+      "unit": "Day",
+      "base_cost_mxn": 55000,
+      "notes": "[NEW from Budget 3] Mercado de San Juan"
+    },
+    {
+      "item": "Filming Permits (CDMX)",
+      "unit": "Day",
+      "base_cost_mxn": 5280,
+      "notes": "[B1=B2: $5,401 | B3: $5,159]"
+    },
+    {
+      "item": "Basecamp Setup",
+      "unit": "Day",
+      "base_cost_mxn": 7500,
+      "notes": "[B1=B2: $8,000 | B3: $7,000]"
+    },
+    {
+      "item": "Parking Meters (Parquímetros)",
+      "unit": "Flat",
+      "base_cost_mxn": 28333.33,
+      "notes": "[B1: $30,000 | B2: $15,000 | B3: $40,000]"
+    },
+    {
+      "item": "Location PA (On-Set)",
+      "unit": "Week",
+      "base_cost_mxn": 7500,
+      "notes": "[B1=B2: $8,000 | B3: $7,000]"
+    },
+    {
+      "item": "Set Cleaning Person",
+      "unit": "Week",
+      "base_cost_mxn": 4250,
+      "notes": "[B1=B2: $4,500 | B3: $4,000]"
+    },
+    {
+      "item": "Per Diem - Art Advance Crew",
+      "unit": "Day/Person",
+      "base_cost_mxn": 125,
+      "notes": "[B1=B2: $150 | B3: $100]"
+    },
+    {
+      "item": "Snacks & Bottled Water (Office + Location)",
+      "unit": "Week",
+      "base_cost_mxn": 2500,
+      "notes": "[B1=B2=B3: $2,500]"
+    },
+    {
+      "item": "Expendables - Location/Cleaning",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Loss & Damage - Locations",
+      "unit": "Flat",
+      "base_cost_mxn": 25000,
+      "notes": "[B1: $25,000 | B2: $30,000 | B3: $20,000]"
+    },
+    {
+      "item": "Trash Removal",
+      "unit": "Day",
+      "base_cost_mxn": 400,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Location Parking",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "3600 Transport": [
+    {
+      "item": "Transportation Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 11500,
+      "notes": "[B1=B2: $12,000 | B3: $11,000]"
+    },
+    {
+      "item": "Driver Viáticos (Per Diem)",
+      "unit": "Day/Person",
+      "base_cost_mxn": 80,
+      "notes": "[B1=B2=B3: $80]"
+    },
+    {
+      "item": "Ubers / Taxis / Parking / TAGs",
+      "unit": "Flat",
+      "base_cost_mxn": 26666.67,
+      "notes": "[B1: $20,000 | B2: $25,000 | B3: $35,000]"
+    },
+    {
+      "item": "Gasoline - Pre-Production",
+      "unit": "Week",
+      "base_cost_mxn": 13500,
+      "notes": "[B1=B2: $12,000 | B3: $15,000]"
+    },
+    {
+      "item": "Gasoline - Shoot",
+      "unit": "Week",
+      "base_cost_mxn": 72500,
+      "notes": "[B1=B2: $75,000 | B3: $70,000]"
+    },
+    {
+      "item": "Gasoline - Wrap",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Vehicle Repairs & Maintenance",
+      "unit": "Flat",
+      "base_cost_mxn": 10000,
+      "notes": "[B1=B2=B3: $10,000]"
+    },
+    {
+      "item": "Director Car Rental",
+      "unit": "Week",
+      "base_cost_mxn": 7750,
+      "notes": "[B1=B2: $8,000 | B3: $7,500]"
+    },
+    {
+      "item": "Cast Car Rental",
+      "unit": "Week",
+      "base_cost_mxn": 7750,
+      "notes": "[B1=B2: $8,000 | B3: $7,500]"
+    },
+    {
+      "item": "Production Van (Standard)",
+      "unit": "Week",
+      "base_cost_mxn": 8300,
+      "notes": "[B1: $8,400 | B2: $8,500 | B3: $8,000]"
+    },
+    {
+      "item": "Production Van (Small - Art/Construction/Props)",
+      "unit": "Week",
+      "base_cost_mxn": 8133.33,
+      "notes": "[B1=B2: $8,000 | B3: $8,400]"
+    },
+    {
+      "item": "Production Truck (3.5 ton)",
+      "unit": "Week",
+      "base_cost_mxn": 14250,
+      "notes": "[B1=B2: $14,500 | B3: $14,000]"
+    },
+    {
+      "item": "Props Truck",
+      "unit": "Week",
+      "base_cost_mxn": 13500,
+      "notes": "[B1=B2: $13,000 | B3: $14,000]"
+    },
+    {
+      "item": "Cast Camper (Large/Star)",
+      "unit": "Week",
+      "base_cost_mxn": 16500,
+      "notes": "[B1=B2: $18,000 | B3: $15,000]"
+    },
+    {
+      "item": "Cast Camper (Standard)",
+      "unit": "Week",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Basecamp Generator",
+      "unit": "Week",
+      "base_cost_mxn": 15500,
+      "notes": "[B1=B2: $16,000 | B3: $14,500]"
+    },
+    {
+      "item": "Bathroom Camper",
+      "unit": "Week",
+      "base_cost_mxn": 13933.33,
+      "notes": "[B1=B2: $14,000 | B3: $13,800]"
+    },
+    {
+      "item": "Vanette (Medium Truck - Deco)",
+      "unit": "Week",
+      "base_cost_mxn": 14100,
+      "notes": "[B1: $14,000 | B2: $14,500 | B3: $13,800]"
+    },
+    {
+      "item": "Wardrobe Van",
+      "unit": "Week",
+      "base_cost_mxn": 8133.33,
+      "notes": "[B1: $8,000 | B2: $8,400 | B3: $8,000]"
+    },
+    {
+      "item": "COVID Van",
+      "unit": "Week",
+      "base_cost_mxn": 8000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Expendables - Transportation",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": "[B1=B2=B3: $15,000]"
+    },
+    {
+      "item": "Loss & Damage - Transportation",
+      "unit": "Flat",
+      "base_cost_mxn": 12500,
+      "notes": "[B1=B2: $10,000 | B3: $15,000]"
+    },
+    {
+      "item": "Crew Bus",
+      "unit": "Day",
+      "base_cost_mxn": 20000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "3700 Office": [
+    {
+      "item": "Production Office Rent",
+      "unit": "Month",
+      "base_cost_mxn": 31500,
+      "notes": "[B1=B2: $30,000 | B3: $33,000]"
+    },
+    {
+      "item": "Office Cleaning",
+      "unit": "Month",
+      "base_cost_mxn": 4000,
+      "notes": "[B1=B2=B3: $4,000]"
+    },
+    {
+      "item": "Office Security",
+      "unit": "Month",
+      "base_cost_mxn": 4000,
+      "notes": "[B1=B2=B3: $4,000]"
+    },
+    {
+      "item": "Office Utilities (Power, Water, Phone)",
+      "unit": "Month",
+      "base_cost_mxn": 6000,
+      "notes": "[B1=B2=B3: $6,000]"
+    },
+    {
+      "item": "Petty Cash - Office",
+      "unit": "Flat",
+      "base_cost_mxn": 22500,
+      "notes": "[B1=B2: $20,000 | B3: $25,000]"
+    },
+    {
+      "item": "Office Expendables",
+      "unit": "Flat",
+      "base_cost_mxn": 20000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Printer Rental - Office",
+      "unit": "Month",
+      "base_cost_mxn": 2950,
+      "notes": "[B1=B2: $3,000 | B3: $2,900]"
+    },
+    {
+      "item": "Printer Rental - Set",
+      "unit": "Month",
+      "base_cost_mxn": 1300,
+      "notes": "[B1=B2=B3: $1,300]"
+    }
+  ],
+  "3800 Lab/Media": [
+    {
+      "item": "Digital Dailies Processing & Upload",
+      "unit": "Month",
+      "base_cost_mxn": 38750,
+      "notes": "B3 converted Wk→Mo: $25K/wk ×1.5 = $37,500/mo (approx); [B1=B2: $40,000/mo | B3: $25,000/wk]"
+    },
+    {
+      "item": "Shuttle Drive (Taxi Disk)",
+      "unit": "Unit",
+      "base_cost_mxn": 6500,
+      "notes": null
+    },
+    {
+      "item": "RAID Drive 14TB",
+      "unit": "Unit",
+      "base_cost_mxn": 6500,
+      "notes": null
+    },
+    {
+      "item": "RAID Enclosure (8-bay)",
+      "unit": "Unit",
+      "base_cost_mxn": 22000,
+      "notes": null
+    },
+    {
+      "item": "RAID Drive Rental",
+      "unit": "Week",
+      "base_cost_mxn": 10000,
+      "notes": "[NEW from Budget 3] 6 weeks"
+    }
+  ],
+  "4900 General": [
+    {
+      "item": "BTL OT Allowance - Key Crew (Gaffer, Grip, Best Boy)",
+      "unit": "%",
+      "base_cost_mxn": 5.5,
+      "notes": "[B1=B2: 4% | B3: 7%]"
+    },
+    {
+      "item": "BTL OT Allowance - H&MU Crew",
+      "unit": "%",
+      "base_cost_mxn": 4,
+      "notes": "On base H&MU salaries"
+    }
+  ],
+  "5000 Editorial": [
+    {
+      "item": "Picture Editor",
+      "unit": "Week",
+      "base_cost_mxn": 25000,
+      "notes": "[B1=B2=B3: $25,000]"
+    },
+    {
+      "item": "Assistant Editor",
+      "unit": "Week",
+      "base_cost_mxn": 9666.67,
+      "notes": "[B1: $10,000 | B2: $9,000 | B3: $10,000]"
+    },
+    {
+      "item": "Post-Production Supervisor",
+      "unit": "Flat",
+      "base_cost_mxn": 400000,
+      "notes": "B1=monthly ($70K/mo), B2=flat ($400K), B3=flat ($400K); [B1: $70K/mo | B2=B3: $400,000 flat]"
+    },
+    {
+      "item": "Post-Production Producer",
+      "unit": "Flat",
+      "base_cost_mxn": 400000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Post-Production Coordinator",
+      "unit": "Month",
+      "base_cost_mxn": 34166.67,
+      "notes": "[B1: $35,000/mo | B2: ~$27,500/mo | B3: $40,000/mo (5.5 mo)]"
+    },
+    {
+      "item": "Post-Production PA",
+      "unit": "Month",
+      "base_cost_mxn": 22500,
+      "notes": "[B1: $25,000/mo | B2: ~$20,000/mo | B3: N/A]"
+    },
+    {
+      "item": "Cutting Room Rental (per station)",
+      "unit": "Month",
+      "base_cost_mxn": 18000,
+      "notes": null
+    },
+    {
+      "item": "Cutting Room - Editor Station",
+      "unit": "Week",
+      "base_cost_mxn": 6500,
+      "notes": "[NEW from Budget 3] 16 weeks"
+    },
+    {
+      "item": "Cutting Room - Asst Station",
+      "unit": "Week",
+      "base_cost_mxn": 4500,
+      "notes": "[NEW from Budget 3] 17 weeks"
+    },
+    {
+      "item": "LTO Archival",
+      "unit": "Flat",
+      "base_cost_mxn": 30000,
+      "notes": "[B1=B2=B3: $30,000]"
+    },
+    {
+      "item": "Editorial Hard Drives",
+      "unit": "Unit",
+      "base_cost_mxn": 8000,
+      "notes": null
+    }
+  ],
+  "5100 Finishing": [
+    {
+      "item": "Conform",
+      "unit": "Hour",
+      "base_cost_mxn": 3000,
+      "notes": null
+    },
+    {
+      "item": "VFX Export",
+      "unit": "Hour",
+      "base_cost_mxn": 3500,
+      "notes": "Zeroed in budgets"
+    },
+    {
+      "item": "VFX Insert",
+      "unit": "Hour",
+      "base_cost_mxn": 2500,
+      "notes": "Zeroed in budgets"
+    },
+    {
+      "item": "Color Correction - HDR",
+      "unit": "Hour",
+      "base_cost_mxn": 3333.33,
+      "notes": "[B1=B2: $3,000 | B3: $4,000]"
+    },
+    {
+      "item": "Color Correction - SDR Trim",
+      "unit": "Hour",
+      "base_cost_mxn": 3000,
+      "notes": "[B1=B2: $2,500 | B3: $4,000]"
+    },
+    {
+      "item": "Color Review",
+      "unit": "Hour",
+      "base_cost_mxn": 4000,
+      "notes": "[NEW from Budget 3] 24 hours"
+    },
+    {
+      "item": "Online",
+      "unit": "Hour",
+      "base_cost_mxn": 3000,
+      "notes": null
+    },
+    {
+      "item": "Servicing Turnover - UHD APRES 422HQ",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": null
+    },
+    {
+      "item": "Servicing Turnover - HD H264 SDR",
+      "unit": "Unit",
+      "base_cost_mxn": 4500,
+      "notes": null
+    },
+    {
+      "item": "IMF Master - SDR",
+      "unit": "Flat",
+      "base_cost_mxn": 22000,
+      "notes": "[B1=B2: $18,000 | B3: $26,000]"
+    },
+    {
+      "item": "IMF Master - HDR",
+      "unit": "Flat",
+      "base_cost_mxn": 26000,
+      "notes": "[B1=B2: $18,000 | B3: $34,000]"
+    },
+    {
+      "item": "IMF Master - Textless SDR & HDR",
+      "unit": "Flat",
+      "base_cost_mxn": 18000,
+      "notes": null
+    },
+    {
+      "item": "DCP",
+      "unit": "Flat",
+      "base_cost_mxn": 18250,
+      "notes": "[B1=B2: $18,000 | B3: $18,500 (incl. DCDM XYZ DCI + Textless)]"
+    },
+    {
+      "item": "DSM Rec 709",
+      "unit": "Flat",
+      "base_cost_mxn": 21000,
+      "notes": null
+    },
+    {
+      "item": "QC Passes/Reports",
+      "unit": "Flat",
+      "base_cost_mxn": 150000,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Hard Drives (Post)",
+      "unit": "Flat",
+      "base_cost_mxn": 100000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Editorial Disks",
+      "unit": "Flat",
+      "base_cost_mxn": 44200,
+      "notes": "[NEW from Budget 3] Discos p/Editorial, post"
+    },
+    {
+      "item": "VDM EXR 16 Bits 4K UHD",
+      "unit": "Unit",
+      "base_cost_mxn": 25000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "VDM EXR Textless",
+      "unit": "Unit",
+      "base_cost_mxn": 5000,
+      "notes": "[NEW from Budget 3]"
+    }
+  ],
+  "5200 Post Sound": [
+    {
+      "item": "Sound Design/Supervision Package",
+      "unit": "Flat",
+      "base_cost_mxn": 249122.5,
+      "notes": "[B2: $248,245 | B3: $250,000]"
+    },
+    {
+      "item": "SFX Supervision/Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 81550,
+      "notes": "[B2: $81,600 | B3: $81,500]"
+    },
+    {
+      "item": "Dialogue Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 35853.33,
+      "notes": "[B1: $50,000 | B2: $28,560 | B3: $29,000]"
+    },
+    {
+      "item": "ADR Recording & Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 33933.33,
+      "notes": "[B1: $20,000 | B2: $40,800 | B3: $41,000]"
+    },
+    {
+      "item": "Foley Recording & Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 117666.67,
+      "notes": "B3 combined Foley line; [B1=B2: $100,000 | B3: $153,000]"
+    },
+    {
+      "item": "Sound Effects Recording & Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 45720,
+      "notes": "[B1: $52,000 | B2: $42,160 | B3: $43,000]"
+    },
+    {
+      "item": "Ambiences Recording & Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 32520,
+      "notes": "[B1: $40,500 | B2: $28,560 | B3: $28,500]"
+    },
+    {
+      "item": "Final Mix 5.1/2.0",
+      "unit": "Flat",
+      "base_cost_mxn": 146000,
+      "notes": "[NEW from Budget 3] Mezcla 5.1/2.0"
+    },
+    {
+      "item": "Pre-Mix 5.1",
+      "unit": "Flat",
+      "base_cost_mxn": 190033.5,
+      "notes": "[B1: $235,000 | B2: $145,067 | B3: N/A (separate Final Mix)]"
+    },
+    {
+      "item": "M&E",
+      "unit": "Flat",
+      "base_cost_mxn": 27100,
+      "notes": "[B2: $27,200 | B3: $27,000]"
+    },
+    {
+      "item": "Sound Deliverables",
+      "unit": "Flat",
+      "base_cost_mxn": 60800,
+      "notes": "[B1: $75,000 | B2: $54,400 | B3: $53,000]"
+    },
+    {
+      "item": "Mixing Room Rental",
+      "unit": "Flat",
+      "base_cost_mxn": 120000,
+      "notes": null
+    },
+    {
+      "item": "Foley Editing",
+      "unit": "Flat",
+      "base_cost_mxn": 81600,
+      "notes": "[NEW from Budget 2]"
+    },
+    {
+      "item": "Foley Recording",
+      "unit": "Flat",
+      "base_cost_mxn": 71808,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "5300 Stock": [
+    {
+      "item": "Stock Footage / Clip Licenses",
+      "unit": "Flat",
+      "base_cost_mxn": 102166.67,
+      "notes": "REVIEW: Scope differs widely. [B1: $100,000 | B2: $6,500 | B3: $200,000]"
+    }
+  ],
+  "5400 Titles": [
+    {
+      "item": "Main & End Title Sequence + Roller",
+      "unit": "Flat",
+      "base_cost_mxn": 166666.67,
+      "notes": "[B1: $200,000 | B2: $50,000 | B3: $250,000]"
+    },
+    {
+      "item": "Graphics Package",
+      "unit": "Flat",
+      "base_cost_mxn": 101000,
+      "notes": "[B1: $52,000 | B2: $150,000 | B3: N/A]"
+    },
+    {
+      "item": "Subtitles Package",
+      "unit": "Flat",
+      "base_cost_mxn": 60675,
+      "notes": "Consolidated subtitle costs; [B1=B2: ~$71,350 | B3: $50,000 (subtitulaje + CCSL + broadcast)]"
+    },
+    {
+      "item": "Localizations Package",
+      "unit": "Flat",
+      "base_cost_mxn": 65000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "6000 Music": [
+    {
+      "item": "Composer (All-In Package)",
+      "unit": "Flat",
+      "base_cost_mxn": 500000,
+      "notes": "[B1: $400,000 | B2: $500,000 | B3: $600,000]"
+    },
+    {
+      "item": "Music Supervisor",
+      "unit": "Flat",
+      "base_cost_mxn": 283333.33,
+      "notes": "[B1=B2: $250,000 | B3: $350,000 (Lynn Fainchtein)]"
+    },
+    {
+      "item": "Music Rights / Licensing",
+      "unit": "Flat",
+      "base_cost_mxn": 953333.33,
+      "notes": "REVIEW: Scope differs enormously. [B1: $870,000 (US$50K@17.4) | B2: $40,000 (MXN allow.) | B3: $1,950,000 (US$97.5K@20, 9 songs)]"
+    },
+    {
+      "item": "Music Editor",
+      "unit": "Week",
+      "base_cost_mxn": 16000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "6100 VFX": [
+    {
+      "item": "VFX Package (Outside Vendor)",
+      "unit": "Flat",
+      "base_cost_mxn": 716666.67,
+      "notes": "[B1: $750,000 | B2: $800,000 | B3: $600,000]"
+    },
+    {
+      "item": "GFX Package",
+      "unit": "Flat",
+      "base_cost_mxn": 60000,
+      "notes": "[NEW from Budget 2]"
+    }
+  ],
+  "7000 Admin": [
+    {
+      "item": "Lemon Studio Accounting",
+      "unit": "Week",
+      "base_cost_mxn": 5000,
+      "notes": "[NEW from Budget 3] Contabilidad Lemon (14 weeks)"
+    },
+    {
+      "item": "Post-Production Accountant",
+      "unit": "Month",
+      "base_cost_mxn": 40000,
+      "notes": "[B1: $40,000 | B2: $24,000 | B3: $56,000 (4 mo)]"
+    },
+    {
+      "item": "Legal Fees",
+      "unit": "Flat",
+      "base_cost_mxn": 283333.33,
+      "notes": "[B1=B2: $300,000 | B3: $250,000]"
+    },
+    {
+      "item": "Contract Translations",
+      "unit": "Flat",
+      "base_cost_mxn": 15000,
+      "notes": "[NEW from Budget 3] Traducciones"
+    },
+    {
+      "item": "Background Checks",
+      "unit": "Unit",
+      "base_cost_mxn": 1500,
+      "notes": "15 budgeted; [B1=B2=B3: $1,500]"
+    },
+    {
+      "item": "Photocopies",
+      "unit": "Flat",
+      "base_cost_mxn": 5000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "Bank Charges",
+      "unit": "Month",
+      "base_cost_mxn": 10500,
+      "notes": "[B1=B2=B3: $10,500]"
+    }
+  ],
+  "7100 Publicity": [
+    {
+      "item": "Making-of Photographer",
+      "unit": "Week",
+      "base_cost_mxn": 14000,
+      "notes": "[NEW from Budget 3] Foto fija - 6 weeks"
+    },
+    {
+      "item": "Key Poster Design",
+      "unit": "Flat",
+      "base_cost_mxn": 300000,
+      "notes": "[NEW from Budget 3]"
+    }
+  ],
+  "7200 Insurance": [
+    {
+      "item": "Film Insurance Package",
+      "unit": "Flat",
+      "base_cost_mxn": 425000,
+      "notes": "[B1=B2: $350,000 | B3: $500,000]"
+    },
+    {
+      "item": "E&O Insurance",
+      "unit": "Flat",
+      "base_cost_mxn": 203446.67,
+      "notes": "REVIEW: Wide range. [B1: $245,340 (US$14.1K@17.4) | B2: $15,000 | B3: $350,000]"
+    },
+    {
+      "item": "COVID-19 Medical Supervisor",
+      "unit": "Week",
+      "base_cost_mxn": 17000,
+      "notes": "[NEW from Budget 3] Médico en set"
+    },
+    {
+      "item": "COVID-19 Coordinator",
+      "unit": "Week",
+      "base_cost_mxn": 7000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "COVID-19 Assistant",
+      "unit": "Week",
+      "base_cost_mxn": 7000,
+      "notes": "[NEW from Budget 3]"
+    },
+    {
+      "item": "COVID-19 PCR Testing",
+      "unit": "Flat",
+      "base_cost_mxn": 100000,
+      "notes": "[B1=B2=B3: $100,000]"
+    },
+    {
+      "item": "COVID-19 Antigen Testing",
+      "unit": "Flat",
+      "base_cost_mxn": 420000,
+      "notes": "[NEW from Budget 3] 1,500 tests @$280"
+    },
+    {
+      "item": "COVID-19 Supplies",
+      "unit": "Flat",
+      "base_cost_mxn": 87390,
+      "notes": "[NEW from Budget 3] KN95, sanitizer, disinfectant, oximeters"
+    }
+  ]
+}

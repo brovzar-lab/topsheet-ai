@@ -1,0 +1,35 @@
+# Lemon Budget Engine
+
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# production
+dist/
+build/
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# keys
+*.key
+
+# temp
+.tmp/
+
+# test data (large PDFs)
+docs/test-screenplays/

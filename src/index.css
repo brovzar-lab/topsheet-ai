@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+/* ============================================================
+   LEMON BUDGET ENGINE — Design System
+   Brand: Lemon Studios Editorial Punk
+   ============================================================ */
+
+/* ============ THEME TOKENS ============ */
+@theme {
+  /* Backgrounds */
+  --color-lemon-bg-primary: #2A2A2A;
+  --color-lemon-bg-secondary: #1A1A1A;
+  --color-lemon-bg-tertiary: #0F0F0F;
+  --color-lemon-bg-elevated: #333333;
+
+  /* Accents */
+  --color-lemon-cyan: #00E5C8;
+  --color-lemon-cyan-dim: #00B89E;
+  --color-lemon-yellow: #FFFF00;
+  --color-lemon-yellow-dim: #E8D500;
+  --color-lemon-coral: #FF6B6B;
+  --color-lemon-coral-deep: #E84545;
+
+  /* Neutrals */
+  --color-lemon-white: #FFFFFF;
+  --color-lemon-black: #000000;
+  --color-lemon-gray-100: #F5F5F5;
+  --color-lemon-gray-200: #E0E0E0;
+  --color-lemon-gray-300: #BDBDBD;
+  --color-lemon-gray-400: #9E9E9E;
+  --color-lemon-gray-500: #757575;
+  --color-lemon-gray-600: #4A4A4A;
+  --color-lemon-gray-700: #333333;
+  --color-lemon-gray-800: #222222;
+
+  /* Text */
+  --color-lemon-text-primary: #F0F0F0;
+  --color-lemon-text-body: #C8C8C8;
+  --color-lemon-text-muted: #757575;
+
+  /* Typography */
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'Archivo', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-mono: 'Space Mono', 'Courier New', monospace;
+}
+
+/* ============ BASE LAYER ============ */
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-lemon-bg-tertiary);
+    color: var(--color-lemon-text-body);
+    background-image:
+      linear-gradient(0deg, transparent 24%, rgba(255,255,255,.03) 25%, rgba(255,255,255,.03) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.03) 75%, rgba(255,255,255,.03) 76%, transparent 77%, transparent),
+      linear-gradient(90deg, transparent 24%, rgba(255,255,255,.03) 25%, rgba(255,255,255,.03) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.03) 75%, rgba(255,255,255,.03) 76%, transparent 77%, transparent);
+    background-size: 50px 50px;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    color: var(--color-lemon-text-primary);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 0.92;
+  }
+
+  h1 {
+    font-weight: 900;
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+  }
+
+  h2 {
+    font-weight: 800;
+    font-size: 2.25rem;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+  }
+
+  h3 {
+    font-weight: 700;
+    font-size: 1.4rem;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+  }
+
+  h4 {
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+  }
+}
+
+/* ============ UTILITIES ============ */
+@layer utilities {
+  .lemon-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-lemon-text-muted);
+  }
+
+  .lemon-highlight-cyan {
+    display: inline;
+    padding: 0.1em 0.25em;
+    background: var(--color-lemon-cyan);
+    color: var(--color-lemon-black);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .lemon-highlight-yellow {
+    display: inline;
+    padding: 0.1em 0.25em;
+    background: var(--color-lemon-yellow);
+    color: var(--color-lemon-black);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .lemon-highlight-coral {
+    display: inline;
+    padding: 0.1em 0.25em;
+    background: var(--color-lemon-coral);
+    color: var(--color-lemon-black);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .lemon-textured {
+    background-image:
+      linear-gradient(0deg, transparent 24%, rgba(255,255,255,.03) 25%, rgba(255,255,255,.03) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.03) 75%, rgba(255,255,255,.03) 76%, transparent 77%, transparent),
+      linear-gradient(90deg, transparent 24%, rgba(255,255,255,.03) 25%, rgba(255,255,255,.03) 26%, transparent 27%, transparent 74%, rgba(255,255,255,.03) 75%, rgba(255,255,255,.03) 76%, transparent 77%, transparent);
+    background-size: 50px 50px;
+  }
+
+  .lemon-glow-cyan {
+    box-shadow: 0 0 60px rgba(0, 229, 200, 0.15);
+  }
+}
+
+/* ============ SCROLLBAR ============ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-lemon-bg-tertiary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-lemon-gray-700);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-lemon-gray-500);
+}

@@ -1,0 +1,141 @@
+description = "Evaluate design effectiveness from a UX perspective. Assesses visual hierarchy, information architecture, emotional resonance, and overall design quality with actionable feedback. Optionally pass a URL or area: /i-critique url=http://localhost:3000 area=/editor"
+prompt = """
+Conduct a holistic design critique by first capturing the actual interface visually, then evaluating it as a design director would.
+
+**Use the frontend-design skill for design principles and anti-patterns throughout.**
+
+## Step 1: Launch Browser and Capture Screenshots
+
+Use Playwright MCP tools to view the actual interface:
+
+1. Determine the target URL:
+   - Default: `http://localhost:3000`
+   - If `$ARGUMENTS.url` provided, use that instead
+   - If `$ARGUMENTS.area` provided, append to base URL (e.g. `http://localhost:3000/editor`)
+
+2. Navigate using `mcp_playwright__browser_navigate` with the resolved URL
+
+3. Take a screenshot immediately after load using `mcp_playwright__browser_take_screenshot`
+
+4. Also capture any significant secondary states you can reach without login:
+   - Hover states on key interactive elements (`mcp_playwright__browser_hover`)
+   - Any visible panels, drawers, or modals
+   - Take a screenshot after each interaction
+
+5. If the page requires auth and shows a login screen, screenshot that and note it — still proceed with the critique based on what's visible.
+
+**Base your entire critique on what you actually see in the screenshots, not on assumptions about the code.**
+
+---
+
+## Step 2: Design Critique
+
+Evaluate the interface across these dimensions:
+
+### 1. AI Slop Detection (CRITICAL)
+
+**This is the most important check.** Does this look like every other AI-generated interface from 2024-2025?
+
+Review the design against ALL the **DON'T** guidelines in the frontend-design skill—they are the fingerprints of AI-generated work. Check for the AI color palette, gradient text, dark mode with glowing accents, glassmorphism, hero metric layouts, identical card grids, generic fonts, and all other tells.
+
+**The test**: If you showed this to someone and said "AI made this," would they believe you immediately? If yes, that's the problem.
+
+### 2. Visual Hierarchy
+- Does the eye flow to the most important element first?
+- Is there a clear primary action? Can you spot it in 2 seconds?
+- Do size, color, and position communicate importance correctly?
+- Is there visual competition between elements that should have different weights?
+
+### 3. Information Architecture
+- Is the structure intuitive? Would a new user understand the organization?
+- Is related content grouped logically?
+- Are there too many choices at once? (cognitive overload)
+- Is the navigation clear and predictable?
+
+### 4. Emotional Resonance
+- What emotion does this interface evoke? Is that intentional?
+- Does it match the brand personality?
+- Does it feel trustworthy, approachable, premium, playful—whatever it should feel?
+- Would the target user feel "this is for me"?
+
+### 5. Discoverability & Affordance
+- Are interactive elements obviously interactive?
+- Would a user know what to do without instructions?
+- Are hover/focus states providing useful feedback?
+- Are there hidden features that should be more visible?
+
+### 6. Composition & Balance
+- Does the layout feel balanced or uncomfortably weighted?
+- Is whitespace used intentionally or just leftover?
+- Is there visual rhythm in spacing and repetition?
+- Does asymmetry feel designed or accidental?
+
+### 7. Typography as Communication
+- Does the type hierarchy clearly signal what to read first, second, third?
+- Is body text comfortable to read? (line length, spacing, size)
+- Do font choices reinforce the brand/tone?
+- Is there enough contrast between heading levels?
+
+### 8. Color with Purpose
+- Is color used to communicate, not just decorate?
+- Does the palette feel cohesive?
+- Are accent colors drawing attention to the right things?
+- Does it work for colorblind users? (not just technically—does meaning still come through?)
+
+### 9. States & Edge Cases
+- Empty states: Do they guide users toward action, or just say "nothing here"?
+- Loading states: Do they reduce perceived wait time?
+- Error states: Are they helpful and non-blaming?
+- Success states: Do they confirm and guide next steps?
+
+### 10. Microcopy & Voice
+- Is the writing clear and concise?
+- Does it sound like a human (the right human for this brand)?
+- Are labels and buttons unambiguous?
+- Does error copy help users fix the problem?
+
+---
+
+## Step 3: Generate Critique Report
+
+Structure your feedback as a design director would:
+
+### Screenshots Captured
+List the URLs/states you photographed and note anything you couldn't see due to auth or dynamic content.
+
+### Anti-Patterns Verdict
+**Start here.** Pass/fail: Does this look AI-generated? List specific tells from the skill's Anti-Patterns section. Be brutally honest.
+
+### Overall Impression
+A brief gut reaction—what works, what doesn't, and the single biggest opportunity.
+
+### What's Working
+Highlight 2-3 things done well. Be specific about why they work.
+
+### Priority Issues
+The 3-5 most impactful design problems, ordered by importance:
+
+For each issue:
+- **What**: Name the problem clearly
+- **Why it matters**: How this hurts users or undermines goals
+- **Fix**: What to do about it (be concrete)
+- **Command**: Which command to use (`/polish`, `/simplify`, `/bolder`, `/quieter`, etc.)
+
+### Minor Observations
+Quick notes on smaller issues worth addressing.
+
+### Questions to Consider
+Provocative questions that might unlock better solutions:
+- "What if the primary action were more prominent?"
+- "Does this need to feel this complex?"
+- "What would a confident version of this look like?"
+
+**Remember**:
+- Base critique on the actual screenshots, not guesses
+- Be direct—vague feedback wastes everyone's time
+- Be specific—"the submit button" not "some elements"
+- Say what's wrong AND why it matters to users
+- Give concrete suggestions, not just "consider exploring..."
+- Prioritize ruthlessly—if everything is important, nothing is
+- Don't soften criticism—developers need honest feedback to ship great design
+"""
