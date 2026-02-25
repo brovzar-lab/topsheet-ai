@@ -8,6 +8,8 @@ import {
     CalendarDays,
     DollarSign,
     Users,
+    Package,
+    Calendar,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -81,6 +83,30 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <Users size={16} />
                 <span className="font-mono text-xs tracking-widest uppercase">DOODs</span>
             </NavLink>
+            <NavLink
+                to={`/project/${projectId}/elements`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <Package size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">ELEMENTS</span>
+            </NavLink>
+            <NavLink
+                to={`/project/${projectId}/calendar`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <Calendar size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">CALENDAR</span>
+            </NavLink>
         </div>
     );
 }
@@ -141,7 +167,7 @@ export function Sidebar() {
                     LEMON STUDIOS © 2026
                 </span>
                 <span className="block font-mono text-[0.5rem] tracking-wider text-lemon-gray-600 mt-0.5">
-                    v0.3.0
+                    v0.4.0
                 </span>
             </div>
         </aside>

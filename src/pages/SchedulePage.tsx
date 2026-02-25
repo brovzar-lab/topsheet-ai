@@ -37,6 +37,7 @@ import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
+import { detectConflicts } from '@/lib/schedule/conflict-detector';
 import { getCategoryById } from '@/data/element-categories';
 
 // -----------------------------------------------------------------------
@@ -906,6 +907,43 @@ export function SchedulePage() {
                     Click strip to see synopsis • Double-click location to edit
                 </span>
             </div>
+
+            {/* ── Conflict Detection Panel ── */}
+            {schedule && (() => {
+                const conflicts = detectConflicts(schedule);
+                if (conflicts.length === 0) return null;
+                const errors = conflicts.filter((c) => c.severity === 'error');
+                const warnings = conflicts.filter((c) => c.severity === 'warning');
+                return (
+                    <div className="px-6 py-2 bg-lemon-bg-secondary/50 border-b border-lemon-gray-700 flex-shrink-0">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono text-[0.65rem] font-bold text-lemon-coral uppercase tracking-wider">
+                                ⚠ {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
+                            </span>
+                            {errors.length > 0 && (
+                                <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 font-mono text-[0.5rem] rounded font-bold">
+                                    {errors.length} error{errors.length !== 1 ? 's' : ''}
+                                </span>
+                            )}
+                            {warnings.length > 0 && (
+                                <span className="px-1.5 py-0.5 bg-lemon-yellow/20 text-lemon-yellow font-mono text-[0.5rem] rounded font-bold">
+                                    {warnings.length} warning{warnings.length !== 1 ? 's' : ''}
+                                </span>
+                            )}
+                        </div>
+                        <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                            {conflicts.map((c) => (
+                                <div key={c.id} className={`font-mono text-[0.6rem] flex items-center gap-1.5 ${c.severity === 'error' ? 'text-red-400' :
+                                    c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
+                                    }`}>
+                                    <span>{c.severity === 'error' ? '🔴' : c.severity === 'warning' ? '🟡' : 'ℹ️'}</span>
+                                    {c.message}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* ── Stripboard ── */}
             <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
