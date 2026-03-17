@@ -22,9 +22,21 @@ export interface BatchProgress {
 
 export type ProgressCallback = (progress: BatchProgress) => void;
 
+export type ErrorType = 'quota' | 'auth' | 'parse' | 'unknown';
+
+export interface FailedScene {
+    sceneNumber: string;
+    error: string;
+    errorType: ErrorType;
+    /** Raw scene text — used to seed the Line Producer panel */
+    sceneContent: string;
+    /** Slugline for display */
+    slugline: string;
+}
+
 export interface BatchResult {
     succeeded: SceneBreakdown[];
-    failed: { sceneNumber: string; error: string }[];
+    failed: FailedScene[];
 }
 
 // -----------------------------------------------------------------------
@@ -56,7 +68,7 @@ export async function processBreakdownBatch(
     signal?: AbortSignal,
 ): Promise<BatchResult> {
     const succeeded: SceneBreakdown[] = [];
-    const failed: { sceneNumber: string; error: string }[] = [];
+    const failed: FailedScene[] = [];
     const total = scenes.length;
 
     for (let i = 0; i < scenes.length; i++) {
@@ -95,16 +107,33 @@ export async function processBreakdownBatch(
             );
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            console.error(`[batch-processor] ✗ ${sceneLabel}: ${message}`);
-            failed.push({ sceneNumber: scene.sceneNumber, error: message });
+            const status = (err as { status?: number })?.status;
+            const errorType: ErrorType =
+                status === 429 ? 'quota'
+                : (status === 401 || status === 403) ? 'auth'
+                : message.toLowerCase().includes('parse') || message.toLowerCase().includes('json') ? 'parse'
+                : 'unknown';
+
+            console.error(`[batch-processor] ✗ ${sceneLabel} [${errorType}]: ${message}`);
+            failed.push({
+                sceneNumber: scene.sceneNumber,
+                error: message,
+                errorType,
+                sceneContent: scene.content,
+                slugline: scene.slugline.raw,
+            });
 
             // Fail-fast on fatal errors (wrong model, bad API key, etc.)
-            const status = (err as { status?: number })?.status;
             if (status === 404 || status === 401 || status === 403) {
                 console.error(`[batch-processor] Fatal error (${status}), stopping batch`);
-                // Mark remaining scenes as failed with the same error
                 for (let j = i + 1; j < scenes.length; j++) {
-                    failed.push({ sceneNumber: scenes[j]!.sceneNumber, error: message });
+                    failed.push({
+                        sceneNumber: scenes[j]!.sceneNumber,
+                        error: message,
+                        errorType: 'auth',
+                        sceneContent: scenes[j]!.content,
+                        slugline: scenes[j]!.slugline.raw,
+                    });
                 }
                 break;
             }

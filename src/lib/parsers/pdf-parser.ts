@@ -15,6 +15,35 @@ export interface PDFParseResult {
     text: string;
     pageCount: number;
     pages: string[];
+    /** The last printed page-number stamp found in the PDF footer/header, or null if not detected. */
+    lastPageStamp: number | null;
+}
+
+/**
+ * Scan the last 3 pages of extracted text for a standalone number that looks
+ * like a screenplay page-number footer/header.
+ * Returns null if nothing plausible is found.
+ */
+export function detectLastPageStamp(pages: string[], pdfPageCount: number): number | null {
+    const tailPages = pages.slice(-3);
+    // Scan from the end so we find the largest/latest stamp first
+    for (let p = tailPages.length - 1; p >= 0; p--) {
+        const lines = tailPages[p]!.split('\n');
+        // Check last 8 and first 4 lines of each page (header/footer zone)
+        const candidates = [...lines.slice(0, 4), ...lines.slice(-8)];
+        for (let i = candidates.length - 1; i >= 0; i--) {
+            const trimmed = candidates[i]!.trim();
+            // Must be a bare number, possibly followed by a period
+            if (/^\d{1,4}\.?$/.test(trimmed)) {
+                const n = parseInt(trimmed, 10);
+                // Must be plausible: within ±15 of the PDF page count and at least 2
+                if (n >= 2 && Math.abs(n - pdfPageCount) <= 15) {
+                    return n;
+                }
+            }
+        }
+    }
+    return null;
 }
 
 interface TextRun {
@@ -131,9 +160,12 @@ export async function extractTextFromPDF(file: File): Promise<PDFParseResult> {
     ).slice(0, 10);
     console.log('[pdf-parser] Lines containing INT/EXT (first 10):', intExtLines);
 
+    const lastPageStamp = detectLastPageStamp(pages, pdf.numPages);
+
     return {
         text: fullText,
         pageCount: pdf.numPages,
         pages,
+        lastPageStamp,
     };
 }

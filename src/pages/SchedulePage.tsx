@@ -39,6 +39,7 @@ import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { detectConflicts } from '@/lib/schedule/conflict-detector';
 import { getCategoryById } from '@/data/element-categories';
+import { AssistantDirectorPanel, type ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
 
 // -----------------------------------------------------------------------
 // Types
@@ -445,6 +446,7 @@ function DayGroup({
     onRemoveDay,
     expandedStripId,
     onToggleStrip,
+    onDayClick,
     breakdowns,
     sceneContentMap,
     visibleColumns,
@@ -462,6 +464,7 @@ function DayGroup({
     onRemoveDay: (dayId: string) => void;
     expandedStripId: string | null;
     onToggleStrip: (stripId: string) => void;
+    onDayClick: () => void;
     breakdowns: Record<string, SceneBreakdown>;
     sceneContentMap: Record<string, string>;
     visibleColumns: Set<ColumnKey>;
@@ -493,7 +496,10 @@ function DayGroup({
     return (
         <div className="mb-4">
             {/* Day header */}
-            <div className="flex items-center gap-3 px-3 py-2 bg-lemon-bg-elevated rounded-t border border-lemon-gray-700">
+            <div
+                className="flex items-center gap-3 px-3 py-2 bg-lemon-bg-elevated rounded-t border border-lemon-gray-700 cursor-pointer hover:bg-lemon-bg-secondary/80 transition-colors"
+                onClick={onDayClick}
+            >
                 <button
                     onClick={() => setCollapsed((v) => !v)}
                     className="text-lemon-text-muted hover:text-lemon-cyan transition-colors"
@@ -600,7 +606,9 @@ export function SchedulePage() {
     const splitStripAction = useScheduleStore((s) => s.splitStrip);
     const setDayDate = useScheduleStore((s) => s.setDayDate);
 
-    // Active drag state
+    // State for the AD panel
+    const [activeDayNumber, setActiveDayNumber] = useState<number | null>(null);
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
     const [activeStrip, setActiveStrip] = useState<StripboardStrip | null>(null);
 
     // Expanded strip for synopsis
@@ -636,14 +644,21 @@ export function SchedulePage() {
         })
     );
 
-    // Auto-generate schedule if none exists and we have scenes
+    // Ref guard: ensure auto-generation runs at most once per component lifecycle.
+    // Using a ref prevents the effect from cycling when setSchedule updates the store,
+    // which would otherwise toggle `schedule` between null/defined on each render.
+    const didAutoGenerate = useRef(false);
     useEffect(() => {
+        if (didAutoGenerate.current) return;
         if (!projectId || scenes.length === 0) return;
-        if (schedule) return; // Already have one
+        if (schedule) return; // Already have one — no-op
 
+        didAutoGenerate.current = true;
         const draft = generateSchedule(scenes, breakdowns, { projectId });
         setSchedule(projectId, draft);
-    }, [projectId, scenes, breakdowns, schedule, setSchedule]);
+    // scenes and breakdowns are arrays/objects; use .length + projectId as stable triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, scenes.length]);
 
     // Regenerate handler — clear first, then generate fresh
     const handleRegenerate = useCallback(() => {
@@ -745,13 +760,7 @@ export function SchedulePage() {
         [projectId, schedule, moveStrip]
     );
 
-    // Compute summary stats
-    const totalDays = schedule?.shootDays.length ?? 0;
-    const totalScenes = schedule?.shootDays.reduce((sum, d) => sum + d.strips.length, 0) ?? 0;
-    const totalPages = schedule?.shootDays.reduce((sum, d) => sum + d.totalPages, 0) ?? 0;
-    const totalPagesDisplay = `${Math.floor(totalPages / 8)}${totalPages % 8 !== 0 ? ` ${totalPages % 8}/8` : ''}`;
-
-    // No project or no scenes
+    // Guards — must come before derived stats to avoid NaN/crash on empty state
     if (!projectId) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -777,6 +786,12 @@ export function SchedulePage() {
             </div>
         );
     }
+
+    // Compute summary stats (safe: projectId and scenes are guaranteed above)
+    const totalDays = schedule?.shootDays.length ?? 0;
+    const totalScenes = schedule?.shootDays.reduce((sum, d) => sum + d.strips.length, 0) ?? 0;
+    const totalPages = schedule?.shootDays.reduce((sum, d) => sum + d.totalPages, 0) ?? 0;
+    const totalPagesDisplay = `${Math.floor(totalPages / 8)}${totalPages % 8 !== 0 ? ` ${totalPages % 8}/8` : ''}`;
 
     return (
         <div className="flex flex-col h-full">
@@ -945,48 +960,66 @@ export function SchedulePage() {
                 );
             })()}
 
-            {/* ── Stripboard ── */}
-            <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
-                {schedule ? (
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                    >
-                        {schedule.shootDays.map((day) => (
-                            <DayGroup
-                                key={day.id}
-                                day={day}
-                                projectId={projectId}
-                                onRemoveDay={(dayId) => removeDay(projectId, dayId)}
-                                expandedStripId={expandedStripId}
-                                onToggleStrip={handleToggleStrip}
-                                breakdowns={breakdowns}
-                                sceneContentMap={sceneContentMap}
-                                visibleColumns={visibleColumns}
-                                editingStripId={editingStripId}
-                                editField={editField}
-                                onStartEdit={handleStartEdit}
-                                onCommitEdit={handleCommitEdit}
-                                onCancelEdit={handleCancelEdit}
-                                onUpdateNotes={handleUpdateNotes}
-                                onSplitScene={(dayId, stripId) => { splitStripAction(projectId, dayId, stripId); setExpandedStripId(null); }}
-                                onSetDayDate={(dayId, date) => setDayDate(projectId, dayId, date)}
-                            />
-                        ))}
+            {/* ── Main content row (stripboard + AD panel) ── */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
 
-                        <DragOverlay>
-                            {activeStrip ? <OverlayStrip strip={activeStrip} /> : null}
-                        </DragOverlay>
-                    </DndContext>
-                ) : (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-lemon-text-muted font-mono text-sm animate-pulse">
-                            Generating schedule...
-                        </p>
-                    </div>
-                )}
+                {/* Stripboard */}
+                <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
+                    {schedule ? (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                        >
+                            {schedule.shootDays.map((day) => (
+                                <DayGroup
+                                    key={day.id}
+                                    day={day}
+                                    projectId={projectId}
+                                    onRemoveDay={(dayId) => removeDay(projectId, dayId)}
+                                    expandedStripId={expandedStripId}
+                                    onToggleStrip={handleToggleStrip}
+                                    onDayClick={() => setActiveDayNumber(day.dayNumber)}
+                                    breakdowns={breakdowns}
+                                    sceneContentMap={sceneContentMap}
+                                    visibleColumns={visibleColumns}
+                                    editingStripId={editingStripId}
+                                    editField={editField}
+                                    onStartEdit={handleStartEdit}
+                                    onCommitEdit={handleCommitEdit}
+                                    onCancelEdit={handleCancelEdit}
+                                    onUpdateNotes={handleUpdateNotes}
+                                    onSplitScene={(dayId, stripId) => { splitStripAction(projectId, dayId, stripId); setExpandedStripId(null); }}
+                                    onSetDayDate={(dayId, date) => setDayDate(projectId, dayId, date)}
+                                />
+                            ))}
+
+                            <DragOverlay>
+                                {activeStrip ? <OverlayStrip strip={activeStrip} /> : null}
+                            </DragOverlay>
+                        </DndContext>
+                    ) : (
+                        <div className="flex items-center justify-center h-full">
+                            <p className="text-lemon-text-muted font-mono text-sm animate-pulse">
+                                Generating schedule...
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Rafa — AI First AD panel */}
+                <AssistantDirectorPanel
+                    projectId={projectId}
+                    isOpen={adPanelOpen}
+                    onToggle={() => setAdPanelOpen(v => !v)}
+                    snapshot={schedule ? {
+                        projectId,
+                        schedule,
+                        breakdowns,
+                        activeDayNumber,
+                    } : null}
+                />
             </div>
         </div>
     );

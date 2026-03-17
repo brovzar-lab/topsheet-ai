@@ -15,7 +15,8 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
     persist(
         (set) => ({
-            geminiApiKey: '',
+            // Seed from env var if no key is stored yet (personal-tool convenience)
+            geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY ?? '',
             exchangeRate: 17.5,
             defaultLanguage: 'en',
             defaultContingencyPercent: 10,

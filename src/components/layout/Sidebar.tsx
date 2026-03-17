@@ -1,6 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-    LayoutDashboard,
     FilePlus,
     Settings,
     FileText,
@@ -11,12 +10,6 @@ import {
     Package,
     Calendar,
 } from 'lucide-react';
-
-const NAV_ITEMS = [
-    { to: '/', icon: LayoutDashboard, label: 'DASHBOARD' },
-    { to: '/project/new', icon: FilePlus, label: 'NEW PROJECT' },
-    { to: '/settings', icon: Settings, label: 'SETTINGS' },
-] as const;
 
 function ProjectNav({ projectId }: { projectId: string }) {
     return (
@@ -113,9 +106,10 @@ function ProjectNav({ projectId }: { projectId: string }) {
 
 export function Sidebar() {
     const location = useLocation();
-    // Extract project ID from URL: /project/<id> or /project/<id>/breakdown etc.
     const projectMatch = location.pathname.match(/^\/project\/([^/]+)/);
     const projectId = projectMatch?.[1];
+    // Don't show project nav for /project/new
+    const showProjectNav = projectId && projectId !== 'new';
 
     return (
         <aside className="w-64 flex-shrink-0 bg-lemon-bg-primary lemon-textured border-r border-lemon-gray-700 flex flex-col h-full">
@@ -139,36 +133,46 @@ export function Sidebar() {
             </div>
 
             {/* Main Nav */}
-            <nav className="flex-1 py-4">
+            <nav className="flex-1 py-4 overflow-y-auto">
                 <span className="lemon-label block px-4 mb-3">NAVIGATION</span>
-                {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
-                    <NavLink
-                        key={to}
-                        to={to}
-                        end={to === '/'}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
-                                ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
-                                : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
-                            }`
-                        }
-                    >
-                        <Icon size={16} />
-                        <span className="font-mono text-xs tracking-widest">{label}</span>
-                    </NavLink>
-                ))}
+                <NavLink
+                    to="/project/new"
+                    className={({ isActive }) =>
+                        `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                            ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                            : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                        }`
+                    }
+                >
+                    <FilePlus size={16} />
+                    <span className="font-mono text-xs tracking-widest">NEW PROJECT</span>
+                </NavLink>
 
-                {projectId && <ProjectNav projectId={projectId} />}
+                {showProjectNav && <ProjectNav projectId={projectId} />}
             </nav>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-lemon-gray-700">
-                <span className="font-mono text-[0.55rem] tracking-[0.15em] text-lemon-gray-500 uppercase">
-                    LEMON STUDIOS © 2026
-                </span>
-                <span className="block font-mono text-[0.5rem] tracking-wider text-lemon-gray-600 mt-0.5">
-                    v0.4.0
-                </span>
+            {/* Footer — Settings gear + version */}
+            <div className="p-4 border-t border-lemon-gray-700 flex items-center justify-between">
+                <div>
+                    <span className="font-mono text-[0.55rem] tracking-[0.15em] text-lemon-gray-500 uppercase">
+                        LEMON STUDIOS © 2026
+                    </span>
+                    <span className="block font-mono text-[0.5rem] tracking-wider text-lemon-gray-600 mt-0.5">
+                        v0.4.0
+                    </span>
+                </div>
+                <NavLink
+                    to="/settings"
+                    title="Settings"
+                    className={({ isActive }) =>
+                        `p-2 rounded transition-colors ${isActive
+                            ? 'text-lemon-cyan bg-lemon-cyan/10'
+                            : 'text-lemon-gray-500 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                        }`
+                    }
+                >
+                    <Settings size={16} />
+                </NavLink>
             </div>
         </aside>
     );

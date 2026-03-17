@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectNewPage } from './pages/ProjectNewPage';
 import { ProjectPage } from './pages/ProjectPage';
@@ -25,16 +26,25 @@ export default function App() {
             <Sidebar />
             <main className="flex-1 overflow-y-auto">
                 <Routes>
-                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/" element={<ProjectNewPage />} />
                     <Route path="/project/new" element={<ProjectNewPage />} />
-                    <Route path="/project/:id" element={<ProjectPage />} />
-                    <Route path="/project/:id/breakdown" element={<BreakdownPage />} />
-                    <Route path="/project/:id/schedule" element={<SchedulePage />} />
-                    <Route path="/project/:id/budget" element={<BudgetPage />} />
-                    <Route path="/project/:id/doods" element={<DOODsPage />} />
-                    <Route path="/project/:id/elements" element={<ElementsPage />} />
-                    <Route path="/project/:id/calendar" element={<CalendarPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route
+                        path="/project/:id/*"
+                        element={
+                            <ErrorBoundary>
+                                <Routes>
+                                    <Route index element={<ProjectPage />} />
+                                    <Route path="breakdown" element={<BreakdownPage />} />
+                                    <Route path="schedule" element={<SchedulePage />} />
+                                    <Route path="budget" element={<BudgetPage />} />
+                                    <Route path="doods" element={<DOODsPage />} />
+                                    <Route path="elements" element={<ElementsPage />} />
+                                    <Route path="calendar" element={<CalendarPage />} />
+                                </Routes>
+                            </ErrorBoundary>
+                        }
+                    />
                 </Routes>
             </main>
         </div>

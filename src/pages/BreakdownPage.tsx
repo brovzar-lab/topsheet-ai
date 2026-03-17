@@ -1,8 +1,14 @@
 /**
  * BreakdownPage.tsx — AI-powered scene breakdown viewer.
  *
- * Layout: Scene sidebar (left) + Breakdown detail (right).
- * Features: run AI breakdown, view color-coded elements, add/remove, mark reviewed.
+ * Three-column layout:
+ *   [Scene Sidebar (256px)] | [Main Content (flex-1)] | [Line Producer Panel (288px, collapsible)]
+ *
+ * Features:
+ *   - Run AI breakdown across all scenes
+ *   - Mark individual scene reviewed / Mark ALL reviewed in one click
+ *   - Rich failure cards with error-type badges, per-scene retry, and "Fix with AI" handoff
+ *   - AI Line Producer panel (right column, always present, never floating)
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -10,16 +16,20 @@ import { useParams, Link } from 'react-router-dom';
 import {
     Zap, Check, AlertTriangle, Circle, Plus, Trash2,
     ChevronRight, KeyRound, FileText, Loader2, StopCircle,
-    CheckCircle2, XCircle,
+    CheckCircle2, XCircle, RefreshCw, Bot, CheckSquare,
 } from 'lucide-react';
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useBudgetStore } from '@/stores/budget-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { ELEMENT_CATEGORIES, getCategoryById } from '@/data/element-categories';
 import { createBreakdownModel } from '@/lib/ai/gemini-client';
 import { processBreakdownBatch } from '@/lib/ai/batch-processor';
-import type { BatchProgress } from '@/lib/ai/batch-processor';
+import type { BatchProgress, FailedScene } from '@/lib/ai/batch-processor';
 import type { BreakdownElement, ElementCategoryId } from '@/types';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { LineProducerContext, ProjectSnapshot } from '@/components/LineProducerPanel';
+import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
 
 // -----------------------------------------------------------------------
 // Main component
@@ -27,10 +37,17 @@ import type { BreakdownElement, ElementCategoryId } from '@/types';
 
 const EMPTY_SCENES: import('@/types').Scene[] = [];
 
+const ERROR_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+    quota: { label: 'QUOTA', color: '#f59e0b' },
+    auth:  { label: 'AUTH',  color: '#ef4444' },
+    parse: { label: 'PARSE', color: '#8b5cf6' },
+    unknown: { label: 'ERROR', color: '#6b7280' },
+};
+
 export function BreakdownPage() {
     const { id: projectId } = useParams<{ id: string }>();
     const scenes = useSceneStore((s) => s.scenes[projectId ?? ''] ?? EMPTY_SCENES);
-    const { breakdowns, setBreakdown, addElement, removeElement, markReviewed, copyElementToScenes } = useBreakdownStore();
+    const { breakdowns, setBreakdown, addElement, removeElement, markReviewed, markAllReviewed, copyElementToScenes } = useBreakdownStore();
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
 
     const [selectedScene, setSelectedScene] = useState<string | null>(
@@ -38,7 +55,8 @@ export function BreakdownPage() {
     );
     const [progress, setProgress] = useState<BatchProgress | null>(null);
     const [isRunning, setIsRunning] = useState(false);
-    const [failures, setFailures] = useState<{ sceneNumber: string; error: string }[]>([]);
+    const [failures, setFailures] = useState<FailedScene[]>([]);
+    const [retrying, setRetrying] = useState<Set<string>>(new Set());
     const abortRef = useRef<AbortController | null>(null);
 
     // -- Dev: scene limit for faster testing --
@@ -48,6 +66,10 @@ export function BreakdownPage() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [newElementName, setNewElementName] = useState('');
     const [newElementCategory, setNewElementCategory] = useState<ElementCategoryId>('props');
+
+    // -- Line Producer panel --
+    const [lpOpen, setLpOpen] = useState(false);
+    const [lpContext, setLpContext] = useState<LineProducerContext | null>(null);
 
     // ---------------------------------------------------------------
     // Run AI breakdown
@@ -71,7 +93,6 @@ export function BreakdownPage() {
                 controller.signal,
             );
 
-            // Store results
             for (const bd of result.succeeded) {
                 setBreakdown(bd.sceneNumber, bd);
             }
@@ -86,6 +107,53 @@ export function BreakdownPage() {
 
     const stopBreakdown = useCallback(() => {
         abortRef.current?.abort();
+    }, []);
+
+    // ---------------------------------------------------------------
+    // Retry single failed scene
+    // ---------------------------------------------------------------
+
+    const retryScene = useCallback(async (failed: FailedScene) => {
+        if (!apiKey) return;
+        const scene = scenes.find((s) => s.sceneNumber === failed.sceneNumber);
+        if (!scene) return;
+
+        setRetrying((prev) => new Set(prev).add(failed.sceneNumber));
+        try {
+            const model = createBreakdownModel(apiKey);
+            const elements = await generateSceneBreakdown(
+                model,
+                scene.sceneNumber,
+                scene.content,
+                scene.slugline.raw,
+            );
+            setBreakdown(scene.sceneNumber, { sceneNumber: scene.sceneNumber, elements, reviewed: false });
+            setFailures((prev) => prev.filter((f) => f.sceneNumber !== failed.sceneNumber));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[BreakdownPage] Retry failed for ${failed.sceneNumber}:`, msg);
+        } finally {
+            setRetrying((prev) => {
+                const next = new Set(prev);
+                next.delete(failed.sceneNumber);
+                return next;
+            });
+        }
+    }, [apiKey, scenes, setBreakdown]);
+
+    // ---------------------------------------------------------------
+    // Open Line Producer with scene error context
+    // ---------------------------------------------------------------
+
+    const fixWithAI = useCallback((failed: FailedScene) => {
+        setLpContext({
+            sceneNumber: failed.sceneNumber,
+            slugline: failed.slugline,
+            errorType: failed.errorType,
+            errorMessage: failed.error,
+            sceneContent: failed.sceneContent,
+        });
+        setLpOpen(true);
     }, []);
 
     // ---------------------------------------------------------------
@@ -116,6 +184,17 @@ export function BreakdownPage() {
     const totalElements = Object.values(breakdowns).reduce(
         (sum, bd) => sum + bd.elements.length, 0,
     );
+    const unreviewedCount = Object.values(breakdowns).filter((bd) => !bd.reviewed).length;
+
+    // Snapshot passed to Line Producer — gives Margo full script + breakdown + budget awareness
+    const latestBudget = projectId ? useBudgetStore.getState().getLatestDraft(projectId) : undefined;
+    const projectSnapshot: ProjectSnapshot = {
+        projectId: projectId ?? '',
+        scenes,
+        breakdowns,
+        activeSceneNumber: selectedScene,
+        budget: latestBudget ?? null,
+    };
 
     // ---------------------------------------------------------------
     // Guards
@@ -171,7 +250,10 @@ export function BreakdownPage() {
                     {scenes.map((scene) => {
                         const bd = breakdowns[scene.sceneNumber];
                         const isSelected = scene.sceneNumber === selectedScene;
-                        const status = bd
+                        const hasFailed = failures.some((f) => f.sceneNumber === scene.sceneNumber);
+                        const status = hasFailed
+                            ? 'error'
+                            : bd
                             ? bd.reviewed ? 'reviewed' : 'done'
                             : 'pending';
 
@@ -203,14 +285,44 @@ export function BreakdownPage() {
             </aside>
 
             {/* ============ MAIN CONTENT ============ */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 min-w-0">
                 {/* Header */}
-                <div className="mb-6">
-                    <span className="lemon-label block mb-2">PROJECT · BREAKDOWN</span>
-                    <h1 className="mb-1">Scene Breakdown</h1>
-                    <p className="text-lemon-text-muted font-body text-sm">
-                        AI-powered element extraction for project {projectId}.
-                    </p>
+                <div className="mb-6 flex items-start justify-between gap-4">
+                    <div>
+                        <span className="lemon-label block mb-2">PROJECT · BREAKDOWN</span>
+                        <h1 className="mb-1">Scene Breakdown</h1>
+                        <p className="text-lemon-text-muted font-body text-sm">
+                            AI-powered element extraction for project {projectId}.
+                        </p>
+                    </div>
+
+                    {/* Right-side header actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                        {/* Mark All Reviewed */}
+                        {breakdownCount > 0 && unreviewedCount > 0 && (
+                            <button
+                                onClick={() => markAllReviewed(scenes.map((s) => s.sceneNumber))}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-lemon-bg-secondary border border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-cyan hover:border-lemon-cyan rounded text-xs font-display font-bold uppercase tracking-wider transition-colors"
+                                title={`Mark all ${unreviewedCount} unreviewed scenes as reviewed`}
+                            >
+                                <CheckSquare size={12} />
+                                Mark All Reviewed
+                            </button>
+                        )}
+                        {/* Line Producer toggle */}
+                        <button
+                            onClick={() => setLpOpen((o) => !o)}
+                            title="AI Line Producer"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-display font-bold uppercase tracking-wider transition-colors ${
+                                lpOpen
+                                    ? 'bg-lemon-cyan/15 border-lemon-cyan/40 text-lemon-cyan'
+                                    : 'bg-lemon-bg-secondary border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-cyan hover:border-lemon-cyan'
+                            }`}
+                        >
+                            <Bot size={12} />
+                            Line Producer
+                        </button>
+                    </div>
                 </div>
 
                 {/* API Key Guard */}
@@ -290,20 +402,70 @@ export function BreakdownPage() {
                     )}
                 </div>
 
-                {/* Failures */}
+                {/* ── Failures ─────────────────────────────────── */}
                 {failures.length > 0 && (
-                    <div className="mb-6 p-4 border border-lemon-coral/30 bg-lemon-coral/5 rounded-lg">
-                        <p className="text-sm text-lemon-coral font-body mb-2 flex items-center gap-2">
-                            <XCircle size={14} />
-                            {failures.length} scene(s) failed
+                    <div className="mb-6 space-y-2">
+                        <p className="flex items-center gap-2 text-xs font-display font-bold uppercase tracking-wider text-lemon-coral">
+                            <XCircle size={13} />
+                            {failures.length} scene{failures.length !== 1 ? 's' : ''} failed
                         </p>
-                        <ul className="text-xs text-lemon-text-muted space-y-1">
-                            {failures.map((f) => (
-                                <li key={f.sceneNumber}>
-                                    Scene {f.sceneNumber}: {f.error}
-                                </li>
-                            ))}
-                        </ul>
+
+                        {failures.map((f) => {
+                            const badge = ERROR_TYPE_LABELS[f.errorType] ?? ERROR_TYPE_LABELS.unknown!;
+                            const isRetrying = retrying.has(f.sceneNumber);
+
+                            return (
+                                <div
+                                    key={f.sceneNumber}
+                                    className="border border-lemon-coral/25 bg-lemon-coral/4 rounded-lg p-3 flex items-start gap-3"
+                                >
+                                    {/* Left: scene info + error */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <span className="text-xs font-mono text-lemon-text-primary font-bold">
+                                                Scene {f.sceneNumber}
+                                            </span>
+                                            <span
+                                                className="text-[0.55rem] font-display font-black uppercase tracking-wider px-1.5 py-0.5 rounded"
+                                                style={{ backgroundColor: badge.color + '22', color: badge.color, border: `1px solid ${badge.color}44` }}
+                                            >
+                                                {badge.label}
+                                            </span>
+                                            {f.slugline && (
+                                                <span className="text-[0.6rem] text-lemon-text-muted truncate max-w-[200px]">
+                                                    {f.slugline}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-lemon-text-muted leading-snug line-clamp-2">
+                                            {f.error}
+                                        </p>
+                                    </div>
+
+                                    {/* Right: actions */}
+                                    <div className="flex flex-col gap-1 flex-shrink-0">
+                                        <button
+                                            onClick={() => retryScene(f)}
+                                            disabled={isRetrying || !apiKey}
+                                            className="flex items-center gap-1 px-2 py-1 text-[0.6rem] font-display font-bold uppercase tracking-wider border border-lemon-gray-700 rounded text-lemon-text-muted hover:text-lemon-cyan hover:border-lemon-cyan transition-colors disabled:opacity-40"
+                                        >
+                                            {isRetrying
+                                                ? <Loader2 size={10} className="animate-spin" />
+                                                : <RefreshCw size={10} />
+                                            }
+                                            Retry
+                                        </button>
+                                        <button
+                                            onClick={() => fixWithAI(f)}
+                                            className="flex items-center gap-1 px-2 py-1 text-[0.6rem] font-display font-bold uppercase tracking-wider border border-lemon-cyan/30 rounded text-lemon-cyan hover:bg-lemon-cyan/10 transition-colors"
+                                        >
+                                            <Bot size={10} />
+                                            Fix with AI
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -419,6 +581,14 @@ export function BreakdownPage() {
                     </div>
                 )}
             </div>
+
+            {/* ============ LINE PRODUCER PANEL ============ */}
+            <LineProducerPanel
+                context={lpContext}
+                snapshot={projectSnapshot}
+                isOpen={lpOpen}
+                onToggle={() => setLpOpen((o) => !o)}
+            />
         </div>
     );
 }
@@ -427,12 +597,14 @@ export function BreakdownPage() {
 // Sub-components
 // -----------------------------------------------------------------------
 
-function SceneStatusIcon({ status }: { status: 'reviewed' | 'done' | 'pending' }) {
+function SceneStatusIcon({ status }: { status: 'reviewed' | 'done' | 'pending' | 'error' }) {
     switch (status) {
         case 'reviewed':
             return <Check size={14} className="text-lemon-cyan flex-shrink-0" />;
         case 'done':
             return <AlertTriangle size={14} className="text-lemon-yellow flex-shrink-0" />;
+        case 'error':
+            return <XCircle size={14} className="text-lemon-coral flex-shrink-0" />;
         case 'pending':
             return <Circle size={14} className="text-lemon-gray-600 flex-shrink-0" />;
     }

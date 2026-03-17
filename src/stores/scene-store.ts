@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Scene } from '@/types';
 
+// Stable empty array — prevents a new reference on every getScenes call,
+// which would cause Zustand selectors to always fire, creating an infinite re-render loop.
+const EMPTY_SCENES: Scene[] = [];
+
 interface SceneState {
     /** Scenes keyed by project ID */
     scenes: Record<string, Scene[]>;
@@ -20,7 +24,7 @@ export const useSceneStore = create<SceneState>()(
                     scenes: { ...state.scenes, [projectId]: scenes },
                 })),
 
-            getScenes: (projectId) => get().scenes[projectId] ?? [],
+            getScenes: (projectId) => get().scenes[projectId] ?? EMPTY_SCENES,
 
             clearScenes: (projectId) =>
                 set((state) => {

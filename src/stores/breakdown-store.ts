@@ -8,6 +8,8 @@ interface BreakdownState {
     addElement: (sceneNumber: string, element: BreakdownElement) => void;
     removeElement: (sceneNumber: string, elementId: string) => void;
     markReviewed: (sceneNumber: string) => void;
+    unmarkReviewed: (sceneNumber: string) => void;
+    markAllReviewed: (sceneNumbers: string[]) => void;
     copyElementToScenes: (element: BreakdownElement, targetSceneNumbers: string[]) => void;
     getBreakdown: (sceneNumber: string) => SceneBreakdown | undefined;
     clearAll: () => void;
@@ -63,6 +65,29 @@ export const useBreakdownStore = create<BreakdownState>()(
                             [sceneNumber]: { ...existing, reviewed: true },
                         },
                     };
+                }),
+
+            unmarkReviewed: (sceneNumber) =>
+                set((state) => {
+                    const existing = state.breakdowns[sceneNumber];
+                    if (!existing) return state;
+                    return {
+                        breakdowns: {
+                            ...state.breakdowns,
+                            [sceneNumber]: { ...existing, reviewed: false },
+                        },
+                    };
+                }),
+
+            markAllReviewed: (sceneNumbers) =>
+                set((state) => {
+                    const updated = { ...state.breakdowns };
+                    for (const sn of sceneNumbers) {
+                        if (updated[sn]) {
+                            updated[sn] = { ...updated[sn]!, reviewed: true };
+                        }
+                    }
+                    return { breakdowns: updated };
                 }),
 
             getBreakdown: (sceneNumber) => get().breakdowns[sceneNumber],
