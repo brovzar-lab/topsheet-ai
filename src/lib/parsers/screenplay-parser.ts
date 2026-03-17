@@ -218,32 +218,7 @@ export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayP
         }
     }
 
-    // Debug: find lines containing INT/EXT ANYWHERE that weren't matched
-    const matchedLines = new Set(sceneStarts.map((s) => s.lineIndex));
-    const missedScenes: string[] = [];
-    const mergedScenes: string[] = [];
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]!;
-        if (matchedLines.has(i)) continue;
-        // Check if line STARTS with scene heading pattern (should have been caught)
-        if (/^\s*(?:\d+[A-Z]{0,2}\s+)?(?:INT|EXT)\b/i.test(line)) {
-            missedScenes.push(`  Line ${i}: "${line.trim().substring(0, 100)}"`);
-        }
-        // Check if INT/EXT appears MID-LINE (merged with previous text)
-        else if (/\b(?:INT|EXT)\s*[.]\s/i.test(line)) {
-            mergedScenes.push(`  Line ${i}: "${line.trim().substring(0, 100)}"`);
-        }
-    }
 
-    console.log('[screenplay-parser] Total lines:', lines.length);
-    console.log('[screenplay-parser] Scenes found:', sceneStarts.length);
-    console.log('[screenplay-parser] Scene numbers:', sceneStarts.map((s) => s.sceneNumber).join(', '));
-    if (missedScenes.length > 0) {
-        console.warn('[screenplay-parser] ⚠️ Missed (start-of-line):', missedScenes);
-    }
-    if (mergedScenes.length > 0) {
-        console.warn('[screenplay-parser] ⚠️ Merged (mid-line):', mergedScenes);
-    }
 
     // Build scenes from the gaps between headings
     for (let s = 0; s < sceneStarts.length; s++) {

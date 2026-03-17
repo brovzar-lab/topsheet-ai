@@ -89,7 +89,7 @@ function buildTopSheet(wb: ExcelJS.Workbook, draft: BudgetDraft, projectTitle: s
     // Logo / title row
     ws.mergeCells('A1:F1');
     const titleCell = ws.getCell('A1');
-    titleCell.value = `LEMON BUDGET ENGINE — ${projectTitle.toUpperCase()}`;
+    titleCell.value = `TOPSHEET AI — ${projectTitle.toUpperCase()}`;
     titleCell.font = { bold: true, size: 18, color: { argb: `FF${C.yellow}` } };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${C.black}` } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -408,7 +408,7 @@ export async function exportBudgetExcel(
     projectTitle: string,
 ): Promise<void> {
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Lemon Budget Engine';
+    wb.creator = 'Topsheet AI';
     wb.created = new Date();
     wb.properties.date1904 = false;
 
@@ -431,6 +431,4 @@ export async function exportBudgetExcel(
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-
-    console.log(`[export] Downloaded ${filename}`);
 }

@@ -73,10 +73,7 @@ export async function processBreakdownBatch(
 
     for (let i = 0; i < scenes.length; i++) {
         // Check for cancellation
-        if (signal?.aborted) {
-            console.log('[batch-processor] Aborted by user');
-            break;
-        }
+        if (signal?.aborted) break;
 
         const scene = scenes[i]!;
         const sceneLabel = `Scene ${scene.sceneNumber}`;
@@ -101,10 +98,6 @@ export async function processBreakdownBatch(
                 elements,
                 reviewed: false,
             });
-
-            console.log(
-                `[batch-processor] ✓ ${sceneLabel}: ${elements.length} elements`,
-            );
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             const status = (err as { status?: number })?.status;
@@ -151,10 +144,6 @@ export async function processBreakdownBatch(
         currentScene: '',
         phase: 'done',
     });
-
-    console.log(
-        `[batch-processor] Complete: ${succeeded.length} succeeded, ${failed.length} failed`,
-    );
 
     return { succeeded, failed };
 }

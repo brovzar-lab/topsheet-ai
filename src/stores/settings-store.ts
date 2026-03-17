@@ -26,6 +26,6 @@ export const useSettingsStore = create<SettingsState>()(
             setDefaultLanguage: (lang) => set({ defaultLanguage: lang }),
             setDefaultContingencyPercent: (percent) => set({ defaultContingencyPercent: percent }),
         }),
-        { name: 'lemon-budget-settings' }
+        { name: 'topsheet-settings' }
     )
 );

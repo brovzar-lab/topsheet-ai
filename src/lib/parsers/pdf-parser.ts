@@ -57,21 +57,9 @@ interface TextRun {
 // Strategy A: hasEOL-first + fallback to Y grouping
 // -----------------------------------------------------------------------
 
-function reconstructLinesFromItems(items: TextRun[], pageNum: number): string {
+function reconstructLinesFromItems(items: TextRun[]): string {
     if (items.length === 0) return '';
 
-    // ---------- DIAGNOSTIC: log all raw items for page 1 ----------
-    if (pageNum === 1) {
-        console.log(`[pdf-parser] PAGE 1 — ${items.length} raw text items`);
-        const sample = items.slice(0, 60);
-        for (const it of sample) {
-            const y = (it.transform[5] ?? 0).toFixed(1);
-            const x = (it.transform[4] ?? 0).toFixed(1);
-            console.log(`  y=${y} x=${x} eol=${it.hasEOL} str=${JSON.stringify(it.str)}`);
-        }
-    }
-
-    // ---------- Check whether hasEOL is being used ----------
     const hasAnyEOL = items.some((it) => it.hasEOL);
 
     if (hasAnyEOL) {
@@ -89,9 +77,6 @@ function reconstructLinesFromItems(items: TextRun[], pageNum: number): string {
         }
         if (cur.trim()) lines.push(cur.trim());
 
-        if (pageNum === 1) {
-            console.log('[pdf-parser] Strategy: hasEOL. First 20 lines:', lines.slice(0, 20));
-        }
         return lines.join('\n');
     }
 
@@ -122,9 +107,6 @@ function reconstructLinesFromItems(items: TextRun[], pageNum: number): string {
         if (t) lines.push(t);
     }
 
-    if (pageNum === 1) {
-        console.log('[pdf-parser] Strategy: Y-bucket. First 20 lines:', lines.slice(0, 20));
-    }
     return lines.join('\n');
 }
 
@@ -135,9 +117,6 @@ function reconstructLinesFromItems(items: TextRun[], pageNum: number): string {
 export async function extractTextFromPDF(file: File): Promise<PDFParseResult> {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-    console.log(`[pdf-parser] Loading PDF: ${file.name}, pages: ${pdf.numPages}`);
-
     const pages: string[] = [];
 
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -148,18 +127,11 @@ export async function extractTextFromPDF(file: File): Promise<PDFParseResult> {
             .filter((item) => 'str' in item && 'transform' in item)
             .map((item) => item as unknown as TextRun);
 
-        const pageText = reconstructLinesFromItems(textItems, i);
+        const pageText = reconstructLinesFromItems(textItems);
         pages.push(pageText);
     }
 
     const fullText = pages.join('\n').replace(/\x0c/g, '');
-
-    // Log first lines of combined text that contain INT/EXT
-    const intExtLines = fullText.split('\n').filter((l) =>
-        /\b(INT|EXT)\b/i.test(l)
-    ).slice(0, 10);
-    console.log('[pdf-parser] Lines containing INT/EXT (first 10):', intExtLines);
-
     const lastPageStamp = detectLastPageStamp(pages, pdf.numPages);
 
     return {

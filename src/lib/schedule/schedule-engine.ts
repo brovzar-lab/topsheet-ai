@@ -201,11 +201,6 @@ export function generateSchedule(
     // 4. Bin-pack into days
     const shootDays = binPackIntoDays(ordered, targetPages);
 
-    console.log(
-        `[schedule-engine] Generated ${shootDays.length} shoot days from ${scenes.length} scenes ` +
-        `across ${locationGroups.size} locations`
-    );
-
     return {
         id: crypto.randomUUID(),
         projectId: options.projectId,

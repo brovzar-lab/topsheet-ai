@@ -301,7 +301,5 @@ export function generateAutoBudget(
         notes: `Auto-generated v${version} from ${scenes.length} scenes. ${hasSchedule ? `From schedule: ${shootDays}` : `Est. ${shootDays}`} shoot days (${shootWeeks} weeks). Fringes: IMSS 35%, ANDA 13%, OT 5%.`,
     };
 
-    console.log(`[auto-budget] Generated ${allItems.length} line items, total: ${sectionTotals.total + contingencyCentavos} centavos`);
-
     return draft;
 }
