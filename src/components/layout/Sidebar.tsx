@@ -117,16 +117,16 @@ export function Sidebar() {
             <div className="p-5 border-b border-lemon-gray-700">
                 <div className="flex items-center gap-3">
                     <img
-                        src="/lemon-logo-cyan-800x800.png"
-                        alt="Lemon Studios"
-                        className="w-8 h-8"
+                        src="/topsheet-logo.png"
+                        alt="Topsheet AI"
+                        className="w-8 h-8 rounded"
                     />
                     <div>
                         <h1 className="font-display font-black text-sm tracking-wider text-lemon-text-primary leading-none">
-                            LEMON
+                            TOPSHEET
                         </h1>
                         <span className="font-mono text-[0.6rem] tracking-[0.2em] text-lemon-cyan uppercase">
-                            BUDGET ENGINE
+                            AI
                         </span>
                     </div>
                 </div>
@@ -155,7 +155,7 @@ export function Sidebar() {
             <div className="p-4 border-t border-lemon-gray-700 flex items-center justify-between">
                 <div>
                     <span className="font-mono text-[0.55rem] tracking-[0.15em] text-lemon-gray-500 uppercase">
-                        LEMON STUDIOS © 2026
+                        TOPSHEET AI © 2026
                     </span>
                     <span className="block font-mono text-[0.5rem] tracking-wider text-lemon-gray-600 mt-0.5">
                         v0.4.0

@@ -33,3 +33,4 @@ Thumbs.db
 
 # test data (large PDFs)
 docs/test-screenplays/
+.vercel
