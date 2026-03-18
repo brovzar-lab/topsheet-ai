@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
     Upload, AlertTriangle, CheckCircle, Loader2,
     ShieldCheck, ShieldAlert, ArrowRight, MapPin,
@@ -12,8 +12,6 @@ import type { ScriptAnalysis } from '@/lib/ai/gemini-client';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useAuthStore } from '../stores/auth-store';
-import { useSeriesStore } from '../stores/series-store';
 import type { ProductionTier, PrimaryLocation } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -46,26 +44,18 @@ interface ParsedData {
 
 export function ProjectNewPage() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const seriesId = searchParams.get('seriesId');
-    const episodeId = searchParams.get('episodeId');
-    const airNumber = searchParams.get('airNumber');
-    const isEpisodeUpload = Boolean(seriesId && episodeId);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const addProject = useProjectStore((s) => s.addProject);
     const setScenes = useSceneStore((s) => s.setScenes);
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
-    const linkEpisodeToProject = useSeriesStore((s) => s.linkEpisodeToProject);
-    const updateEpisode = useSeriesStore((s) => s.updateEpisode);
-    const user = useAuthStore((s) => s.user);
 
     // Optional project metadata (can be overridden from AI result)
     const [title, setTitle] = useState('');
     const [tier, setTier] = useState<ProductionTier>('mid');
     const [location, setLocation] = useState<PrimaryLocation>('cdmx');
 
-    const [step, setStep] = useState<Step>(isEpisodeUpload ? 'idle' : 'format');
+    const [step, setStep] = useState<Step>('format');
     const [progress, setProgress] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -186,22 +176,8 @@ export function ProjectNewPage() {
 
         setScenes(projectId, parsed.scenes);
 
-        // Link episode to project if this is a series episode upload
-        if (isEpisodeUpload && user && seriesId && episodeId) {
-            linkEpisodeToProject(user.uid, seriesId, episodeId, projectId);
-            updateEpisode(user.uid, seriesId, episodeId, {
-                title: finalTitle,
-                sceneCount: parsed.sceneCount,
-                // totalPages is in 1/8ths; pageCount on Episode is whole pages
-                pageCount: Math.round(parsed.totalPages / 8),
-            });
-            navigate(`/series/${seriesId}`);
-            return;
-        }
-
         navigate(`/project/${projectId}/breakdown`);
-    }, [parsed, title, tier, location, addProject, setScenes, navigate,
-        isEpisodeUpload, user, seriesId, episodeId, linkEpisodeToProject, updateEpisode]);
+    }, [parsed, title, tier, location, addProject, setScenes, navigate]);
 
     const handleReset = useCallback(() => {
         setStep('idle');
@@ -227,13 +203,9 @@ export function ProjectNewPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <h1 className="mb-2">
-                {isEpisodeUpload && airNumber ? `Episode ${airNumber}` : 'New Project'}
-            </h1>
+            <h1 className="mb-2">New Project</h1>
             <p className="text-lemon-text-muted font-body text-sm mb-8">
-                {isEpisodeUpload
-                    ? `Upload the screenplay for Episode ${airNumber}. We'll read it and confirm before starting the breakdown.`
-                    : step === 'format'
+                {step === 'format'
                     ? 'Choose a format to get started. Each format has its own breakdown, schedule, and budget workflow.'
                     : "Drop a screenplay PDF. We'll read it and confirm before starting the breakdown."}
             </p>

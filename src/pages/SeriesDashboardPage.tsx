@@ -24,7 +24,7 @@ function EpisodeCard({ episode, seriesId }: { episode: Episode; seriesId: string
   const isEmpty = episode.status === 'awaiting';
 
   const handleUpload = () => {
-    navigate(`/project/new?seriesId=${seriesId}&episodeId=${episode.id}&airNumber=${episode.airNumber}`);
+    navigate(`/series/${seriesId}/upload/${episode.id}`);
   };
 
   const handleOpenProject = () => {

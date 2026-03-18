@@ -18,6 +18,7 @@ import { SeriesDashboardPage } from './pages/SeriesDashboardPage';
 import { SeriesBudgetPage } from './pages/SeriesBudgetPage';
 import { SeriesMasterSchedulePage } from './pages/SeriesMasterSchedulePage';
 import { SeriesRosterPage } from './pages/SeriesRosterPage';
+import { EpisodeUploadPage } from './pages/EpisodeUploadPage';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAuthStore } from './stores/auth-store';
 import { useProjectStore } from './stores/project-store';
@@ -54,6 +55,7 @@ export default function App() {
                         <Route path="/project/new" element={<ProjectNewPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/series/new" element={<SeriesNewPage />} />
+                        <Route path="/series/:seriesId/upload/:episodeId" element={<EpisodeUploadPage />} />
                         <Route path="/series/:seriesId" element={<SeriesDashboardPage />} />
                         <Route path="/series/:seriesId/budget" element={<SeriesBudgetPage />} />
                         <Route path="/series/:seriesId/schedule" element={<SeriesMasterSchedulePage />} />
