@@ -34,6 +34,8 @@ export interface BudgetLineItem {
     /** Source MPI item ID */
     mpiItemId?: string;
     notes?: string;
+    /** TV episodes only. 'episode' = direct cost to this episode. 'amortized' = fraction of season deal. */
+    costType?: 'episode' | 'amortized';
 }
 
 /** A budget draft — immutable once saved */
@@ -59,6 +61,9 @@ export interface BudgetDraft {
     exchangeRate: number;
     createdAt: string;
     notes?: string;
+    /** Set when this draft belongs to a TV episode. */
+    seriesId?: string;
+    episodeId?: string;
 }
 
 /** Rate card — per-project overrides on top of MPI */

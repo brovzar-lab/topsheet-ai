@@ -5,7 +5,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { SeriesEpisodeBudgetPage } from './SeriesEpisodeBudgetPage';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
@@ -51,6 +52,10 @@ const SECTION_LABELS: Record<BudgetSection, string> = {
 
 export function BudgetPage() {
     const { id: projectId } = useParams<{ id: string }>();
+    const [searchParams] = useSearchParams();
+    const tvSeriesId = searchParams.get('seriesId');
+    const tvEpisodeId = searchParams.get('episodeId');
+
     const project = useProjectStore((s) => s.getProject(projectId ?? ''));
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
@@ -74,6 +79,11 @@ export function BudgetPage() {
 
     const selectedDraft = projectDrafts.find((d) => d.id === selectedDraftId) ?? projectDrafts[0];
     const compareDraft = projectDrafts.find((d) => d.id === compareDraftId);
+
+    // TV episode fork — delegate to focused TV budget page
+    if (tvSeriesId && tvEpisodeId) {
+        return <SeriesEpisodeBudgetPage />;
+    }
 
     // ---------------------------------------------------------------
     // Actions

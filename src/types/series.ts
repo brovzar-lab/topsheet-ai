@@ -33,6 +33,8 @@ export interface Series {
   pilotDesignated: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Optional. If set, enables per-episode budget validation. In centavos (MXN × 100). */
+  totalBudgetCentavos?: number;
 }
 
 export interface Episode {
