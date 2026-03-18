@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Settings, Key, DollarSign, Eye, EyeOff, CheckCircle, Brain, Upload, Trash2, ChevronDown, ChevronUp, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -11,6 +12,8 @@ import { parseBudgetUpload } from '@/lib/budget/mpi-learner';
 import type { MPIUploadResult } from '@/types';
 
 export function SettingsPage() {
+    const navigate = useNavigate();
+
     const {
         geminiApiKey, setGeminiApiKey,
         exchangeRate, setExchangeRate,
@@ -41,6 +44,15 @@ export function SettingsPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
+            <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2 mb-6 font-mono text-[0.65rem] tracking-wider uppercase text-lemon-gray-500 hover:text-lemon-text-body transition-colors"
+            >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M9 3L5 7L9 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Back
+            </button>
             <h1 className="mb-2">Settings</h1>
             <p className="text-lemon-text-muted font-body text-sm mb-8">
                 API keys, exchange rates, and default configuration.

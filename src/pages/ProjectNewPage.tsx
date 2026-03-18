@@ -264,6 +264,41 @@ export function ProjectNewPage() {
             {/* ── CONFIRM CARD ─────────────────────────────────────────── */}
             {step === 'confirm' && parsed && (
                 <div className="space-y-5">
+                    {/* Project metadata strip — compact, at the top */}
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-lemon-bg-secondary/40 border border-lemon-gray-700 rounded-lg text-[0.65rem] font-mono tracking-wider uppercase flex-wrap">
+                        <span className="text-lemon-text-muted">Project Details</span>
+                        <span className="text-lemon-gray-600">·</span>
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="bg-transparent text-lemon-text-primary font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none border-b border-transparent focus:border-lemon-cyan transition-colors min-w-0 w-40"
+                            placeholder="Title"
+                        />
+                        <span className="text-lemon-gray-600">·</span>
+                        <select
+                            value={tier}
+                            onChange={(e) => setTier(e.target.value as ProductionTier)}
+                            className="bg-transparent text-lemon-text-muted font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none cursor-pointer hover:text-lemon-text-primary transition-colors"
+                        >
+                            <option value="low">Low Tier</option>
+                            <option value="mid">Mid Tier</option>
+                            <option value="premium">Premium Tier</option>
+                        </select>
+                        <span className="text-lemon-gray-600">·</span>
+                        <select
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
+                            className="bg-transparent text-lemon-text-muted font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none cursor-pointer hover:text-lemon-text-primary transition-colors"
+                        >
+                            <option value="cdmx">Mexico City</option>
+                            <option value="guadalajara">Guadalajara</option>
+                            <option value="monterrey">Monterrey</option>
+                            <option value="tijuana">Tijuana</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
                     {/* AI Analysis Card */}
                     {analysis && (
                         <div className="border border-lemon-cyan/30 rounded-xl bg-lemon-bg-secondary/60 overflow-hidden">
@@ -373,48 +408,6 @@ export function ProjectNewPage() {
                                 : pageMatch === false
                                     ? `PAGE STAMP ${parsed.lastPageStamp} ≠ PDF (${parsed.totalPages} pages) — check for blank/cover pages`
                                     : 'PAGE STAMP NOT DETECTED'}
-                        </div>
-                    </div>
-
-                    {/* Project metadata (editable before confirming) */}
-                    <div className="border border-lemon-gray-700 rounded-xl bg-lemon-bg-secondary/40 px-6 py-4">
-                        <span className="lemon-label block mb-3">PROJECT DETAILS</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="sm:col-span-1">
-                                <label className="lemon-label block mb-1.5">TITLE</label>
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="lemon-label block mb-1.5">TIER</label>
-                                <select
-                                    value={tier}
-                                    onChange={(e) => setTier(e.target.value as ProductionTier)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                >
-                                    <option value="low">Low (MXN 2–10M)</option>
-                                    <option value="mid">Mid (MXN 10–30M)</option>
-                                    <option value="premium">Premium (MXN 30M+)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="lemon-label block mb-1.5">LOCATION</label>
-                                <select
-                                    value={location}
-                                    onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                >
-                                    <option value="cdmx">CDMX</option>
-                                    <option value="guadalajara">Guadalajara</option>
-                                    <option value="monterrey">Monterrey</option>
-                                    <option value="tijuana">Tijuana</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
 

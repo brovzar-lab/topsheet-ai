@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
     Upload, AlertTriangle, Loader2,
     ArrowRight, RefreshCw, ChevronLeft,
+    Sparkles, MapPin, ShieldCheck, ShieldAlert,
 } from 'lucide-react';
 import { extractTextFromPDF } from '@/lib/parsers/pdf-parser';
 import { parseScreenplay } from '@/lib/parsers/screenplay-parser';
@@ -107,8 +108,8 @@ export function EpisodeUploadPage() {
     const [progress, setProgress] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const [parsed, setParsed] = useState<ParsedData | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [_analysis, setAnalysis] = useState<ScriptAnalysis | null>(null);
+    const [analysis, setAnalysis] = useState<ScriptAnalysis | null>(null);
+    const [pageMatch, setPageMatch] = useState<boolean | null>(null);
 
     // -----------------------------------------------------------------------
     // Main file handler — parse → AI analyze → show confirm state
@@ -152,6 +153,7 @@ export function EpisodeUploadPage() {
                 filenameTitle,
             };
             setParsed(data);
+            setPageMatch(data.lastPageStamp !== null ? data.lastPageStamp === data.totalPages : null);
 
             // Step 3 — AI analysis (if key available)
             if (apiKey) {
@@ -241,6 +243,7 @@ export function EpisodeUploadPage() {
         setErrorMsg('');
         setParsed(null);
         setAnalysis(null);
+        setPageMatch(null);
         setTitle('');
         if (fileInputRef.current) fileInputRef.current.value = '';
     }, []);
@@ -300,30 +303,120 @@ export function EpisodeUploadPage() {
                 </div>
             )}
 
-            {/* ── CONFIRM (inline title edit + start button) ───────────── */}
+            {/* ── CONFIRM ──────────────────────────────────────────────── */}
             {step === 'confirm' && parsed && (
                 <div className="space-y-5">
-                    {/* Editable title */}
+
+                    {/* AI Analysis card — same as film side */}
+                    {analysis && (
+                        <div className="border border-lemon-cyan/30 rounded-xl bg-lemon-bg-secondary/60 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-lemon-gray-700 flex items-center gap-3">
+                                <Sparkles size={18} className="text-lemon-cyan flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    {/* Title as editable input */}
+                                    <input
+                                        type="text"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="w-full bg-transparent font-display font-black text-xl text-lemon-text-primary leading-tight focus:outline-none border-b border-transparent focus:border-lemon-cyan transition-colors"
+                                        placeholder="Episode title..."
+                                    />
+                                    <span className="text-xs font-mono text-lemon-cyan tracking-wider">{analysis.genre}</span>
+                                </div>
+                                {analysis.tone.map((t: string) => (
+                                    <span key={t} className="hidden sm:inline px-2 py-0.5 rounded-full text-[0.6rem] font-mono tracking-wider border border-lemon-gray-600 text-lemon-gray-400 uppercase">
+                                        {t}
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="px-6 py-4 space-y-4">
+                                {analysis.logline && (
+                                    <div>
+                                        <span className="lemon-label block mb-1">LOGLINE</span>
+                                        <p className="text-lemon-text-body font-body text-sm italic leading-relaxed">"{analysis.logline}"</p>
+                                    </div>
+                                )}
+                                {analysis.synopsis && (
+                                    <div>
+                                        <span className="lemon-label block mb-1">SYNOPSIS</span>
+                                        <p className="text-lemon-text-muted font-body text-sm leading-relaxed">{analysis.synopsis}</p>
+                                    </div>
+                                )}
+                                {analysis.topLocations?.length > 0 && (
+                                    <div>
+                                        <span className="lemon-label block mb-2">TOP LOCATIONS</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {analysis.topLocations.map((loc: string) => (
+                                                <span key={loc} className="flex items-center gap-1 px-2.5 py-1 rounded bg-lemon-bg-primary border border-lemon-gray-700 text-xs font-mono text-lemon-text-body">
+                                                    <MapPin size={10} className="text-lemon-cyan" />
+                                                    {loc}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* If no AI analysis, just show editable title */}
+                    {!analysis && (
+                        <div className="border border-lemon-gray-700 rounded-xl bg-lemon-bg-secondary/40 px-6 py-4">
+                            <label className="lemon-label block mb-1.5">EPISODE TITLE</label>
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
+                            />
+                        </div>
+                    )}
+
+                    {/* Parse results — big-number style matching film side */}
                     <div className="border border-lemon-gray-700 rounded-xl bg-lemon-bg-secondary/40 px-6 py-4">
-                        <label className="lemon-label block mb-1.5">EPISODE TITLE</label>
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                        />
-                        <p className="mt-1.5 text-lemon-text-muted font-mono text-[0.55rem] tracking-wider uppercase">
-                            {parsed.sceneCount} scenes · {parsed.totalPages} pages · {parsed.characterCount} characters
-                        </p>
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="lemon-label">PARSE RESULTS</span>
+                        </div>
+                        <div className="flex gap-8 mb-4">
+                            <div className="text-center">
+                                <span className="block font-display font-black text-3xl text-lemon-yellow">{parsed.sceneCount}</span>
+                                <span className="lemon-label">Scenes</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="block font-display font-black text-3xl text-lemon-text-primary">{parsed.totalPages}</span>
+                                <span className="lemon-label">Pages</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="block font-display font-black text-3xl text-lemon-text-primary">{parsed.characterCount}</span>
+                                <span className="lemon-label">Characters</span>
+                            </div>
+                        </div>
+                        {/* Page stamp */}
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono tracking-wider border ${
+                            pageMatch === true
+                                ? 'bg-lemon-cyan/10 border-lemon-cyan/40 text-lemon-cyan'
+                                : pageMatch === false
+                                    ? 'bg-lemon-coral/10 border-lemon-coral/40 text-lemon-coral'
+                                    : 'bg-lemon-gray-700/40 border-lemon-gray-700 text-lemon-gray-400'
+                        }`}>
+                            {pageMatch === true && <ShieldCheck size={13} />}
+                            {pageMatch === false && <ShieldAlert size={13} />}
+                            {pageMatch === null && <ShieldAlert size={13} className="opacity-40" />}
+                            {pageMatch === true
+                                ? `PAGE STAMP ${parsed.lastPageStamp} ✓ MATCHES PDF`
+                                : pageMatch === false
+                                    ? `PAGE STAMP ${parsed.lastPageStamp} ≠ PDF (${parsed.totalPages} pages)`
+                                    : 'PAGE STAMP NOT DETECTED'}
+                        </div>
                     </div>
 
-                    {/* Action buttons */}
+                    {/* CTA */}
                     <div className="flex items-center gap-4">
                         <button
                             onClick={handleConfirm}
                             className="flex items-center gap-2 px-7 py-3 bg-lemon-cyan text-lemon-black font-display font-bold text-sm uppercase tracking-wider rounded hover:bg-lemon-cyan-dim transition-colors"
                         >
-                            Start Breakdown
+                            Looks Good — Start Breakdown
                             <ArrowRight size={16} />
                         </button>
                         <button
@@ -334,6 +427,7 @@ export function EpisodeUploadPage() {
                             Try another file
                         </button>
                     </div>
+
                 </div>
             )}
 
