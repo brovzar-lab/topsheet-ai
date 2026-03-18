@@ -4,6 +4,7 @@ import { saveBreakdown, loadBreakdown } from '@/lib/firestore/breakdowns';
 
 interface BreakdownState {
     breakdowns: Record<string, SceneBreakdown>;
+    lastSavedAt: number | null;
     setBreakdown: (sceneNumber: string, breakdown: SceneBreakdown) => void;
     addElement: (sceneNumber: string, element: BreakdownElement) => void;
     removeElement: (sceneNumber: string, elementId: string) => void;
@@ -25,6 +26,7 @@ export function setBreakdownProjectId(projectId: string): void {
 
 export const useBreakdownStore = create<BreakdownState>((set, get) => ({
     breakdowns: {},
+    lastSavedAt: null,
 
     setBreakdown: (sceneNumber, breakdown) => {
         set((state) => ({
@@ -141,7 +143,9 @@ function _debouncedSync(breakdowns: Record<string, SceneBreakdown>): void {
     _syncTimer = setTimeout(() => {
         const uid = _getUid();
         if (!uid || !_activeProjectId) return;
-        saveBreakdown(uid, _activeProjectId, breakdowns).catch(console.error);
+        saveBreakdown(uid, _activeProjectId, breakdowns)
+            .then(() => useBreakdownStore.setState({ lastSavedAt: Date.now() }))
+            .catch(console.error);
     }, 1000);
 }
 

@@ -40,6 +40,7 @@ function recalcDayLocation(strips: StripboardStrip[]): string {
 
 interface ScheduleState {
     schedules: Record<string, ScheduleDraft>;
+    lastSavedAt: number | null;
     setSchedule: (projectId: string, draft: ScheduleDraft) => void;
     getSchedule: (projectId: string) => ScheduleDraft | undefined;
     moveStrip: (projectId: string, fromDayId: string, toDayId: string, stripId: string, toIndex: number) => void;
@@ -58,6 +59,7 @@ interface ScheduleState {
 
 export const useScheduleStore = create<ScheduleState>((set, get) => ({
     schedules: {},
+    lastSavedAt: null,
 
     setSchedule: (projectId, draft) => {
         set((state) => ({ schedules: { ...state.schedules, [projectId]: draft } }));
@@ -234,7 +236,9 @@ function _debouncedSync(projectId: string, draft: ScheduleDraft): void {
     _syncTimers[projectId] = setTimeout(() => {
         const uid = _getUid();
         if (!uid) return;
-        saveSchedule(uid, projectId, draft).catch(console.error);
+        saveSchedule(uid, projectId, draft)
+            .then(() => useScheduleStore.setState({ lastSavedAt: Date.now() }))
+            .catch(console.error);
     }, 500);
 }
 

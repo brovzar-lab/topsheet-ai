@@ -10,6 +10,7 @@ import {
 
 interface BudgetState {
     drafts: BudgetDraft[];
+    lastSavedAt: number | null;
     addDraft: (draft: BudgetDraft) => void;
     updateDraft: (draftId: string, updater: (draft: BudgetDraft) => BudgetDraft) => void;
     getDraftsForProject: (projectId: string) => BudgetDraft[];
@@ -31,13 +32,16 @@ interface BudgetState {
 
 export const useBudgetStore = create<BudgetState>((set, get) => ({
     drafts: [],
+    lastSavedAt: null,
 
     addDraft: (draft) => {
         set((state) => ({ drafts: [...state.drafts, draft] }));
         const uid = _getUid();
         if (!uid) return;
         // Save header + all line items
-        saveDraftHeader(uid, draft).catch(console.error);
+        saveDraftHeader(uid, draft)
+            .then(() => set({ lastSavedAt: Date.now() }))
+            .catch(console.error);
         if (draft.lineItems.length > 0) {
             bulkSaveLineItems(uid, draft.id, draft.lineItems).catch(console.error);
         }
@@ -53,7 +57,9 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
         const uid = _getUid();
         if (!uid) return;
         // Always save the header
-        saveDraftHeader(uid, updated).catch(console.error);
+        saveDraftHeader(uid, updated)
+            .then(() => set({ lastSavedAt: Date.now() }))
+            .catch(console.error);
         // Only save line items that changed
         if (prev) {
             const prevIds = new Set(prev.lineItems.map((l) => l.id));
