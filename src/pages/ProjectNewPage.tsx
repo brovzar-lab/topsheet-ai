@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Upload, AlertTriangle, CheckCircle, Loader2,
     ShieldCheck, ShieldAlert, ArrowRight, MapPin,
@@ -19,6 +19,7 @@ import type { ProductionTier, PrimaryLocation } from '@/types';
 // ---------------------------------------------------------------------------
 
 type Step =
+    | 'format'
     | 'idle'
     | 'reading'
     | 'parsing'
@@ -43,6 +44,12 @@ interface ParsedData {
 
 export function ProjectNewPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const seriesId = searchParams.get('seriesId');
+    const episodeId = searchParams.get('episodeId');
+    const airNumber = searchParams.get('airNumber');
+    const isEpisodeUpload = Boolean(seriesId && episodeId);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const addProject = useProjectStore((s) => s.addProject);
     const setScenes = useSceneStore((s) => s.setScenes);
@@ -53,7 +60,7 @@ export function ProjectNewPage() {
     const [tier, setTier] = useState<ProductionTier>('mid');
     const [location, setLocation] = useState<PrimaryLocation>('cdmx');
 
-    const [step, setStep] = useState<Step>('idle');
+    const [step, setStep] = useState<Step>(isEpisodeUpload ? 'idle' : 'format');
     const [progress, setProgress] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -200,10 +207,67 @@ export function ProjectNewPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <h1 className="mb-2">New Project</h1>
+            <h1 className="mb-2">
+                {isEpisodeUpload && airNumber ? `Episode ${airNumber}` : 'New Project'}
+            </h1>
             <p className="text-lemon-text-muted font-body text-sm mb-8">
-                Drop a screenplay PDF. We'll read it and confirm before starting the breakdown.
+                {isEpisodeUpload
+                    ? `Upload the screenplay for Episode ${airNumber}. We'll read it and confirm before starting the breakdown.`
+                    : step === 'format'
+                    ? 'Choose a format to get started. Each format has its own breakdown, schedule, and budget workflow.'
+                    : "Drop a screenplay PDF. We'll read it and confirm before starting the breakdown."}
             </p>
+
+            {/* ── FORMAT SELECTOR ─────────────────────────────────── */}
+            {step === 'format' && (
+                <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                        {/* Feature Film */}
+                        <button
+                            onClick={() => setStep('idle')}
+                            className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
+                        >
+                            <span className="text-3xl mb-3 block">🎬</span>
+                            <p className="font-mono text-[0.6rem] tracking-widest uppercase text-lemon-cyan mb-1">
+                                Single Production
+                            </p>
+                            <h2 className="text-lemon-text-primary mb-2">Feature Film</h2>
+                            <p className="text-lemon-text-muted text-sm leading-relaxed">
+                                One screenplay. Full breakdown, schedule, and budget in a single project.
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                {['1 Screenplay', '1 Budget', '1 Schedule'].map(t => (
+                                    <span key={t} className="font-mono text-[0.58rem] tracking-wide uppercase px-2 py-0.5 border border-lemon-gray-700 rounded text-lemon-text-muted">
+                                        {t}
+                                    </span>
+                                ))}
+                            </div>
+                        </button>
+
+                        {/* TV Series */}
+                        <button
+                            onClick={() => navigate('/series/new')}
+                            className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
+                        >
+                            <span className="text-3xl mb-3 block">📺</span>
+                            <p className="font-mono text-[0.6rem] tracking-widest uppercase text-lemon-cyan mb-1">
+                                Multi-Episode
+                            </p>
+                            <h2 className="text-lemon-text-primary mb-2">TV Series</h2>
+                            <p className="text-lemon-text-muted text-sm leading-relaxed">
+                                Define your series first, then upload each episode screenplay into its own compartment.
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                {['N Episodes', 'Series Budget', 'Master Schedule'].map(t => (
+                                    <span key={t} className="font-mono text-[0.58rem] tracking-wide uppercase px-2 py-0.5 border border-lemon-gray-700 rounded text-lemon-text-muted">
+                                        {t}
+                                    </span>
+                                ))}
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── CONFIRM CARD ─────────────────────────────────────────── */}
             {step === 'confirm' && parsed && (
@@ -383,7 +447,7 @@ export function ProjectNewPage() {
             )}
 
             {/* ── DROPZONE (idle / processing / error) ─────────────────── */}
-            {step !== 'confirm' && (
+            {step !== 'confirm' && step !== 'format' && (
                 <>
                     {/* Optional pre-fill fields */}
                     {step === 'idle' && (
