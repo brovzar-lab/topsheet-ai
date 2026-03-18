@@ -21,6 +21,7 @@ import { SeriesRosterPage } from './pages/SeriesRosterPage';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAuthStore } from './stores/auth-store';
 import { useProjectStore } from './stores/project-store';
+import { useSeriesStore } from './stores/series-store';
 import { ProjectLoader } from './components/ProjectLoader';
 
 
@@ -30,13 +31,15 @@ export default function App() {
     const projectId = projectMatch?.[1];
     const { user } = useAuthStore();
     const { loadFromFirestore } = useProjectStore();
+    const { loadAllSeries } = useSeriesStore();
 
-    // Load projects from Firestore whenever user signs in
+    // Load projects and series from Firestore whenever user signs in
     useEffect(() => {
         if (user?.uid) {
             loadFromFirestore(user.uid);
+            loadAllSeries(user.uid);
         }
-    }, [user?.uid, loadFromFirestore]);
+    }, [user?.uid, loadFromFirestore, loadAllSeries]);
 
     // Global keyboard shortcuts
     useKeyboardShortcuts(projectId && projectId !== 'new' ? projectId : undefined);
