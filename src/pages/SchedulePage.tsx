@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuthStore } from '@/stores/auth-store';
+import { useSeriesStore } from '../stores/series-store';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DndContext,
@@ -41,6 +43,46 @@ import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { detectConflicts } from '@/lib/schedule/conflict-detector';
 import { getCategoryById } from '@/data/element-categories';
 import { AssistantDirectorPanel, type ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+
+// -----------------------------------------------------------------------
+// TV schedule helpers
+// -----------------------------------------------------------------------
+
+/** TV pages-per-day in 1/8ths. Drama = 80 (10 pages), Comedy/short-form = 96 (12 pages). */
+function getTvPagesPerDay(format: string, runtimeMinutes: number): number {
+    if (format === 'comedy' || runtimeMinutes <= 30) return 96;
+    return 80; // drama, procedural, limited, anthology, docuseries
+}
+
+const TV_SCHEDULE_BENCHMARKS: Record<string, { min: number; max: number }> = {
+    drama: { min: 6, max: 10 },
+    procedural: { min: 6, max: 10 },
+    limited: { min: 6, max: 10 },
+    anthology: { min: 6, max: 10 },
+    comedy: { min: 4, max: 6 },
+    docuseries: { min: 4, max: 8 },
+};
+
+function ShootDayValidationBanner({
+    days, format, runtimeMinutes,
+}: { days: number; format: string; runtimeMinutes: number }) {
+    const key = format in TV_SCHEDULE_BENCHMARKS ? format : (runtimeMinutes <= 30 ? 'comedy' : 'drama');
+    const { min, max } = TV_SCHEDULE_BENCHMARKS[key]!;
+    if (days >= min && days <= max) return null;
+    const isOver = days > max;
+    return (
+        <div className={`mb-4 px-4 py-3 rounded border text-sm font-mono ${
+            isOver
+                ? 'bg-lemon-coral/10 border-lemon-coral/40 text-lemon-coral'
+                : 'bg-lemon-yellow/10 border-lemon-yellow/40 text-lemon-yellow-dim'
+        }`}>
+            {isOver
+                ? `Schedule is ${days - max} day${days - max > 1 ? 's' : ''} over the ${max}-day benchmark for this format (${days} days scheduled).`
+                : `Schedule is below the minimum ${min}-day benchmark for this format (${days} days scheduled). Verify page count is correct.`
+            }
+        </div>
+    );
+}
 
 // -----------------------------------------------------------------------
 // Types
@@ -594,6 +636,11 @@ export function SchedulePage() {
     const { id: projectId } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
+    const [searchParams] = useSearchParams();
+    const seriesId = searchParams.get('seriesId');
+    const { activeSeries, loadSeries } = useSeriesStore();
+    const user = useAuthStore((s) => s.user);
+
     const scenes = useSceneStore((s) => s.getScenes(projectId ?? ''));
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
@@ -645,6 +692,14 @@ export function SchedulePage() {
         })
     );
 
+    // Load series data when the page is opened in episode context
+    useEffect(() => {
+        if (!seriesId || !user?.uid) return;
+        if (activeSeries?.id === seriesId) return; // already loaded
+        loadSeries(user.uid, seriesId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seriesId, user?.uid]);
+
     // Ref guard: ensure auto-generation runs at most once per component lifecycle.
     // Using a ref prevents the effect from cycling when setSchedule updates the store,
     // which would otherwise toggle `schedule` between null/defined on each render.
@@ -655,7 +710,10 @@ export function SchedulePage() {
         if (schedule) return; // Already have one — no-op
 
         didAutoGenerate.current = true;
-        const draft = generateSchedule(scenes, breakdowns, { projectId });
+        const targetPagesPerDay = seriesId && activeSeries
+            ? getTvPagesPerDay(activeSeries.format, activeSeries.runtimeMinutes)
+            : 32; // feature film default
+        const draft = generateSchedule(scenes, breakdowns, { projectId, targetPagesPerDay });
         setSchedule(projectId, draft);
     // scenes and breakdowns are arrays/objects; use .length + projectId as stable triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -665,9 +723,12 @@ export function SchedulePage() {
     const handleRegenerate = useCallback(() => {
         if (!projectId || scenes.length === 0) return;
         clearSchedule(projectId);
-        const draft = generateSchedule(scenes, breakdowns, { projectId });
+        const targetPagesPerDay = seriesId && activeSeries
+            ? getTvPagesPerDay(activeSeries.format, activeSeries.runtimeMinutes)
+            : 32; // feature film default
+        const draft = generateSchedule(scenes, breakdowns, { projectId, targetPagesPerDay });
         setSchedule(projectId, draft);
-    }, [projectId, scenes, breakdowns, clearSchedule, setSchedule]);
+    }, [projectId, scenes, breakdowns, seriesId, activeSeries, clearSchedule, setSchedule]);
 
     // Toggle strip synopsis
     const handleToggleStrip = useCallback((stripId: string) => {
@@ -967,6 +1028,13 @@ export function SchedulePage() {
 
                 {/* Stripboard */}
                 <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
+                    {seriesId && activeSeries && schedule && (
+                        <ShootDayValidationBanner
+                            days={schedule.shootDays.length}
+                            format={activeSeries.format}
+                            runtimeMinutes={activeSeries.runtimeMinutes}
+                        />
+                    )}
                     {schedule ? (
                         <DndContext
                             sensors={sensors}
