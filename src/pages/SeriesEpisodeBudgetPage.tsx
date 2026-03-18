@@ -89,13 +89,13 @@ export function SeriesEpisodeBudgetPage() {
   }, [projectId, projectDrafts, breakdowns, project, settings, schedule, seriesId, episodeId, activeSeries, airNumber, addDraft]);
 
   // ── Topsheet calculations ──────────────────────────────
-  const episodeDirectCentavos = selectedDraft?.lineItems
+  const episodeDirectCentavos = (selectedDraft?.lineItems ?? [])
     .filter(li => li.costType !== 'amortized')
-    .reduce((sum, li) => sum + li.subtotalCentavos, 0) ?? 0;
+    .reduce((sum, li) => sum + li.subtotalCentavos, 0);
 
-  const amortizedCentavos = selectedDraft?.lineItems
+  const amortizedCentavos = (selectedDraft?.lineItems ?? [])
     .filter(li => li.costType === 'amortized')
-    .reduce((sum, li) => sum + li.subtotalCentavos, 0) ?? 0;
+    .reduce((sum, li) => sum + li.subtotalCentavos, 0);
 
   const episodeTotalCentavos = episodeDirectCentavos + amortizedCentavos;
   const contingencyPercent = settings.defaultContingencyPercent;
