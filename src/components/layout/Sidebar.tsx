@@ -167,8 +167,8 @@ export function Sidebar() {
     const episodeSeriesId = searchParams.get('seriesId');
     const episodeEpisodeId = searchParams.get('episodeId');
     const episodeAirNumber = searchParams.get('airNumber');
-    const episodeSuffix = episodeSeriesId && episodeEpisodeId
-        ? `?seriesId=${episodeSeriesId}&episodeId=${episodeEpisodeId}&airNumber=${episodeAirNumber ?? ''}`
+    const episodeSuffix = episodeSeriesId && episodeEpisodeId && episodeAirNumber
+        ? `?seriesId=${episodeSeriesId}&episodeId=${episodeEpisodeId}&airNumber=${episodeAirNumber}`
         : '';
 
     const projectMatch = location.pathname.match(/^\/project\/([^/]+)/);
