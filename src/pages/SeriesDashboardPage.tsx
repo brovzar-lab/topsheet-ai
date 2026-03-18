@@ -136,6 +136,7 @@ function EpisodeCard({ episode, seriesId }: { episode: Episode; seriesId: string
 
 export function SeriesDashboardPage() {
   const { seriesId } = useParams<{ seriesId: string }>();
+  const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
   const { activeSeries, episodes, isLoading, isLoadingEpisodes, loadSeries, loadEpisodes } = useSeriesStore();
   const [sortOrder, setSortOrder] = useState<'air' | 'prod'>('air');
@@ -151,6 +152,8 @@ export function SeriesDashboardPage() {
   const sortedEpisodes = [...episodes].sort((a, b) =>
     sortOrder === 'air' ? a.airNumber - b.airNumber : a.productionNumber - b.productionNumber
   );
+
+  const firstAwaitingEpisode = sortedEpisodes.find(ep => ep.status === 'awaiting');
 
   const uploadedCount = episodes.filter(e => e.status !== 'awaiting').length;
   const progressPct = episodes.length ? Math.round((uploadedCount / episodes.length) * 100) : 0;
@@ -204,12 +207,17 @@ export function SeriesDashboardPage() {
             >
               Edit Series
             </button>
-            <NavLink
-              to={`/project/new?seriesId=${seriesId}`}
-              className="flex items-center gap-1.5 px-5 py-2 bg-lemon-cyan text-lemon-black font-display font-bold text-sm uppercase tracking-wider rounded hover:bg-lemon-cyan-dim transition-colors"
+            <button
+              onClick={() => {
+                if (firstAwaitingEpisode) {
+                  navigate(`/series/${seriesId}/upload/${firstAwaitingEpisode.id}`);
+                }
+              }}
+              disabled={!firstAwaitingEpisode}
+              className="flex items-center gap-1.5 px-5 py-2 bg-lemon-cyan text-lemon-black font-display font-bold text-sm uppercase tracking-wider rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               + Upload Episode
-            </NavLink>
+            </button>
           </div>
         </div>
 
