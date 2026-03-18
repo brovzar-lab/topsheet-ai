@@ -10,6 +10,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import { Package, Search, ChevronDown, ChevronRight, Hash } from 'lucide-react';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { ELEMENT_CATEGORIES, type ElementCategoryDef } from '@/data/element-categories';
@@ -116,6 +117,7 @@ export function ElementsPage() {
 
     return (
         <div className="flex flex-col h-full">
+            <EpisodeBreadcrumb />
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">

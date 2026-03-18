@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DndContext,
     closestCenter,
@@ -795,6 +796,7 @@ export function SchedulePage() {
 
     return (
         <div className="flex flex-col h-full">
+            <EpisodeBreadcrumb />
             {/* ── Header ── */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">

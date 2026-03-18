@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import {
     FilePlus,
     Settings,
@@ -11,12 +11,12 @@ import {
     Calendar,
 } from 'lucide-react';
 
-function ProjectNav({ projectId }: { projectId: string }) {
+function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSuffix: string }) {
     return (
         <div className="mt-6 border-t border-lemon-gray-700 pt-4">
             <span className="lemon-label block px-4 mb-3 text-lemon-cyan">PROJECT</span>
             <NavLink
-                to={`/project/${projectId}`}
+                to={`/project/${projectId}${episodeSuffix}`}
                 end
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -29,7 +29,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">SCRIPT</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/breakdown`}
+                to={`/project/${projectId}/breakdown${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -41,7 +41,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">BREAKDOWN</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/schedule`}
+                to={`/project/${projectId}/schedule${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -53,7 +53,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">SCHEDULE</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/budget`}
+                to={`/project/${projectId}/budget${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -65,7 +65,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">BUDGET</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/doods`}
+                to={`/project/${projectId}/doods${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -77,7 +77,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">DOODs</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/elements`}
+                to={`/project/${projectId}/elements${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -89,7 +89,7 @@ function ProjectNav({ projectId }: { projectId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">ELEMENTS</span>
             </NavLink>
             <NavLink
-                to={`/project/${projectId}/calendar`}
+                to={`/project/${projectId}/calendar${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
                         ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
@@ -163,6 +163,14 @@ function SeriesNav({ seriesId }: { seriesId: string }) {
 
 export function Sidebar() {
     const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const episodeSeriesId = searchParams.get('seriesId');
+    const episodeEpisodeId = searchParams.get('episodeId');
+    const episodeAirNumber = searchParams.get('airNumber');
+    const episodeSuffix = episodeSeriesId && episodeEpisodeId
+        ? `?seriesId=${episodeSeriesId}&episodeId=${episodeEpisodeId}&airNumber=${episodeAirNumber ?? ''}`
+        : '';
+
     const projectMatch = location.pathname.match(/^\/project\/([^/]+)/);
     const projectId = projectMatch?.[1];
     // Don't show project nav for /project/new
@@ -182,11 +190,11 @@ export function Sidebar() {
                         alt="Topsheet AI"
                         className="w-8 h-8 rounded"
                     />
-                    <div>
-                        <h1 className="font-display font-black text-sm tracking-wider text-lemon-text-primary leading-none">
+                    <div className="flex items-baseline gap-1.5">
+                        <h1 className="font-display font-black text-xl tracking-wider text-lemon-text-primary leading-none">
                             TOPSHEET
                         </h1>
-                        <span className="font-mono text-[0.6rem] tracking-[0.2em] text-lemon-cyan uppercase">
+                        <span className="font-mono text-sm tracking-[0.2em] text-lemon-cyan font-bold uppercase leading-none">
                             AI
                         </span>
                     </div>
@@ -209,7 +217,7 @@ export function Sidebar() {
                     <span className="font-mono text-xs tracking-widest">NEW PROJECT</span>
                 </NavLink>
 
-                {showProjectNav && <ProjectNav projectId={projectId} />}
+                {showProjectNav && <ProjectNav projectId={projectId} episodeSuffix={episodeSuffix} />}
                 {showSeriesNav && <SeriesNav seriesId={seriesId!} />}
             </nav>
 

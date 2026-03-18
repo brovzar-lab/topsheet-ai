@@ -13,6 +13,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     Zap, Check, AlertTriangle, Circle, Plus, Trash2,
     ChevronRight, KeyRound, FileText, Loader2, StopCircle,
@@ -286,6 +287,7 @@ export function BreakdownPage() {
 
             {/* ============ MAIN CONTENT ============ */}
             <div className="flex-1 overflow-y-auto p-6 min-w-0">
+                <EpisodeBreadcrumb />
                 {/* Header */}
                 <div className="mb-6 flex items-start justify-between gap-4">
                     <div>

@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
     ChevronDown, ChevronUp, Download, CalendarDays, Eye,
@@ -172,6 +173,7 @@ export function BudgetPage() {
 
     return (
         <div className="p-6 max-w-6xl mx-auto overflow-y-auto">
+            <EpisodeBreadcrumb />
             {/* Header */}
             <span className="lemon-label block mb-2">PROJECT · BUDGET</span>
             <h1 className="mb-1">Budget Drafts</h1>
