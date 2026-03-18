@@ -92,9 +92,13 @@ export const useSeriesStore = create<SeriesState>((set, get) => ({
     },
 
     loadEpisodes: async (uid, seriesId) => {
-        set({ isLoadingEpisodes: true });
-        const episodes = await getEpisodes(uid, seriesId);
-        set({ episodes, isLoadingEpisodes: false });
+        set({ isLoadingEpisodes: true, error: null });
+        try {
+            const episodes = await getEpisodes(uid, seriesId);
+            set({ episodes, isLoadingEpisodes: false });
+        } catch (e) {
+            set({ error: String(e), isLoadingEpisodes: false });
+        }
     },
 
     updateEpisode: (uid, seriesId, episodeId, data) => {
