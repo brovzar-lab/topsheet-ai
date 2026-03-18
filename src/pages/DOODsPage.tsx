@@ -5,11 +5,13 @@
  * Rows = characters, Columns = shoot days, Cells = W (work), H (hold), SW (start/work), WF (work/finish).
  */
 
-import { useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useMemo, useEffect } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import { Users, ArrowLeft } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { useSeriesStore } from '@/stores/series-store';
 
 // Status codes
 type DOODStatus = 'W' | 'SW' | 'WF' | 'SWF' | 'H' | '';
@@ -26,6 +28,17 @@ const STATUS_COLORS: Record<DOODStatus, { bg: string; text: string }> = {
 export function DOODsPage() {
     const { id: projectId } = useParams<{ id: string }>();
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
+
+    const [searchParams] = useSearchParams();
+    const seriesId = searchParams.get('seriesId');
+    const user = useAuthStore((s) => s.user);
+    const { rosterEntries, loadRoster } = useSeriesStore();
+
+    useEffect(() => {
+        if (!seriesId || !user?.uid) return;
+        loadRoster(user.uid, seriesId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seriesId, user?.uid]);
 
     // Build the DOODs matrix
     const { characters, matrix, totalDays } = useMemo(() => {
@@ -82,6 +95,16 @@ export function DOODsPage() {
 
         return { characters, matrix, totalDays };
     }, [schedule]);
+
+    const seriesRegularNames = useMemo(
+        () =>
+            new Set(
+                rosterEntries
+                    .filter((e) => e.isSeriesRegular)
+                    .map((e) => e.name.toUpperCase().trim())
+            ),
+        [rosterEntries]
+    );
 
     if (!projectId) {
         return (
@@ -198,11 +221,19 @@ export function DOODsPage() {
                                     const statuses = matrix.get(char) ?? [];
                                     const workDays = statuses.filter((s: DOODStatus) => s === 'W' || s === 'SW' || s === 'WF' || s === 'SWF').length;
                                     const holdDays = statuses.filter((s: DOODStatus) => s === 'H').length;
+                                    const isSR = seriesId ? seriesRegularNames.has(char) : false;
 
                                     return (
-                                        <tr key={char} className="hover:bg-lemon-bg-elevated/30 transition-colors">
+                                        <tr key={char} className={`hover:bg-lemon-bg-elevated/30 transition-colors${isSR ? ' bg-lemon-cyan/5' : ''}`}>
                                             <td className="sticky left-0 z-10 bg-lemon-bg-primary px-4 py-1.5 text-xs font-mono text-lemon-text-primary border-b border-r border-lemon-gray-700 truncate max-w-[180px]">
-                                                {char}
+                                                <span className="flex items-center gap-1.5">
+                                                    {char}
+                                                    {isSR && (
+                                                        <span className="font-mono text-[0.5rem] tracking-wider uppercase px-1 py-0.5 rounded border border-lemon-cyan/30 text-lemon-cyan bg-lemon-cyan/5 flex-shrink-0">
+                                                            SR
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </td>
                                             {statuses.map((status: DOODStatus, i: number) => {
                                                 const style = STATUS_COLORS[status];

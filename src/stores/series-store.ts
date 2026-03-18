@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Series, Episode, CreateSeriesInput } from '@/types/series';
+import type { Series, Episode, CreateSeriesInput, RosterEntry } from '@/types/series';
 import {
     createSeries as fsCreateSeries,
     getAllSeries,
@@ -18,7 +18,7 @@ interface SeriesState {
     isLoadingEpisodes: boolean;
     error: string | null;
 
-    createSeries: (input: CreateSeriesInput) => Promise<string>;
+    createSeries: (uid: string, input: CreateSeriesInput) => Promise<string>;
     loadAllSeries: (uid: string) => Promise<void>;
     loadSeries: (uid: string, seriesId: string) => Promise<void>;
     updateSeries: (uid: string, seriesId: string, data: Partial<Series>) => void;
@@ -26,6 +26,10 @@ interface SeriesState {
     updateEpisode: (uid: string, seriesId: string, episodeId: string, data: Partial<Episode>) => void;
     linkEpisodeToProject: (uid: string, seriesId: string, episodeId: string, projectId: string) => void;
     clearActiveSeries: () => void;
+
+    rosterEntries: RosterEntry[];
+    isLoadingRoster: boolean;
+    loadRoster: (uid: string, seriesId: string) => Promise<void>;
 }
 
 export const useSeriesStore = create<SeriesState>((set, get) => ({
@@ -36,10 +40,7 @@ export const useSeriesStore = create<SeriesState>((set, get) => ({
     isLoadingEpisodes: false,
     error: null,
 
-    createSeries: async (input) => {
-        const uid = _getUid();
-        if (!uid) throw new Error('Not authenticated');
-
+    createSeries: async (uid, input) => {
         const series = await fsCreateSeries(uid, input);
         const episodes = await fsCreateEpisodes(uid, series.id, input.episodeCount, input.pilotDesignated);
 
@@ -121,15 +122,20 @@ export const useSeriesStore = create<SeriesState>((set, get) => ({
     clearActiveSeries: () => {
         set({ activeSeries: null, episodes: [] });
     },
+
+    rosterEntries: [],
+    isLoadingRoster: false,
+
+    loadRoster: async (uid, seriesId) => {
+        set({ isLoadingRoster: true });
+        try {
+            const { getRosterEntries } = await import('@/lib/firestore/series');
+            const entries = await getRosterEntries(uid, seriesId);
+            set({ rosterEntries: entries, isLoadingRoster: false });
+        } catch {
+            set({ isLoadingRoster: false });
+        }
+    },
 }));
 
-/** Lazily get the current user UID without creating a circular dep */
-function _getUid(): string | null {
-    try {
-        // Dynamic import avoids circular: auth-store → firebase → series-store
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
-}
+

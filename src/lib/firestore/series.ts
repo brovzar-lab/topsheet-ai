@@ -11,7 +11,7 @@ import {
     orderBy,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Series, Episode, CreateSeriesInput } from '@/types/series';
+import type { Series, Episode, CreateSeriesInput, RosterEntry } from '@/types/series';
 import { deriveRuntimeTemplate } from '@/types/series';
 
 // ── Helpers ───────────────────────────────────────────────
@@ -50,7 +50,9 @@ export async function createSeries(
         runtimeTemplate:
             input.runtimeTemplateOverride ??
             deriveRuntimeTemplate(input.runtimeMinutes),
-        runtimeTemplateOverride: input.runtimeTemplateOverride,
+        ...(input.runtimeTemplateOverride !== undefined && {
+            runtimeTemplateOverride: input.runtimeTemplateOverride,
+        }),
         pilotDesignated: input.pilotDesignated,
         createdAt: now,
         updatedAt: now,
@@ -185,4 +187,33 @@ async function _deleteEpisode(
     episodeId: string
 ): Promise<void> {
     await deleteDoc(episodeDocRef(uid, seriesId, episodeId));
+}
+
+// ── Roster ────────────────────────────────────────────────
+
+export async function getRosterEntries(
+    uid: string,
+    seriesId: string
+): Promise<RosterEntry[]> {
+    const q = query(
+        collection(db, 'users', uid, 'series', seriesId, 'roster'),
+        orderBy('name', 'asc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _updatedAt, ...data } = d.data() as RosterEntry & { _updatedAt: unknown };
+        return data;
+    });
+}
+
+export async function upsertRosterEntry(
+    uid: string,
+    seriesId: string,
+    entry: RosterEntry
+): Promise<void> {
+    await setDoc(
+        doc(db, 'users', uid, 'series', seriesId, 'roster', entry.id),
+        { ...entry, _updatedAt: serverTimestamp() }
+    );
 }
