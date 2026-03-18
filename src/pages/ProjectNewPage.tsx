@@ -12,6 +12,8 @@ import type { ScriptAnalysis } from '@/lib/ai/gemini-client';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useAuthStore } from '../stores/auth-store';
+import { useSeriesStore } from '../stores/series-store';
 import type { ProductionTier, PrimaryLocation } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +56,9 @@ export function ProjectNewPage() {
     const addProject = useProjectStore((s) => s.addProject);
     const setScenes = useSceneStore((s) => s.setScenes);
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
+    const linkEpisodeToProject = useSeriesStore((s) => s.linkEpisodeToProject);
+    const updateEpisode = useSeriesStore((s) => s.updateEpisode);
+    const user = useAuthStore((s) => s.user);
 
     // Optional project metadata (can be overridden from AI result)
     const [title, setTitle] = useState('');
@@ -180,8 +185,23 @@ export function ProjectNewPage() {
         });
 
         setScenes(projectId, parsed.scenes);
+
+        // Link episode to project if this is a series episode upload
+        if (isEpisodeUpload && user && seriesId && episodeId) {
+            linkEpisodeToProject(user.uid, seriesId, episodeId, projectId);
+            updateEpisode(user.uid, seriesId, episodeId, {
+                title: finalTitle,
+                sceneCount: parsed.sceneCount,
+                // totalPages is in 1/8ths; pageCount on Episode is whole pages
+                pageCount: Math.round(parsed.totalPages / 8),
+            });
+            navigate(`/series/${seriesId}`);
+            return;
+        }
+
         navigate(`/project/${projectId}/breakdown`);
-    }, [parsed, title, tier, location, addProject, setScenes, navigate]);
+    }, [parsed, title, tier, location, addProject, setScenes, navigate,
+        isEpisodeUpload, user, seriesId, episodeId, linkEpisodeToProject, updateEpisode]);
 
     const handleReset = useCallback(() => {
         setStep('idle');
