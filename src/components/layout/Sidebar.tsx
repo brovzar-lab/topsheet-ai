@@ -104,12 +104,73 @@ function ProjectNav({ projectId }: { projectId: string }) {
     );
 }
 
+function SeriesNav({ seriesId }: { seriesId: string }) {
+    return (
+        <div className="mt-6 border-t border-lemon-gray-700 pt-4">
+            <span className="lemon-label block px-4 mb-3 text-lemon-cyan">SERIES</span>
+            <NavLink
+                to={`/series/${seriesId}`}
+                end
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <SplitSquareHorizontal size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">EPISODES</span>
+            </NavLink>
+            <NavLink
+                to={`/series/${seriesId}/budget`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <DollarSign size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">SERIES BUDGET</span>
+            </NavLink>
+            <NavLink
+                to={`/series/${seriesId}/schedule`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <CalendarDays size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">MASTER SCHEDULE</span>
+            </NavLink>
+            <NavLink
+                to={`/series/${seriesId}/roster`}
+                className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                        ? 'text-lemon-cyan bg-lemon-cyan/10 border-l-3 border-lemon-cyan'
+                        : 'text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50'
+                    }`
+                }
+            >
+                <Users size={16} />
+                <span className="font-mono text-xs tracking-widest uppercase">SERIES ROSTER</span>
+            </NavLink>
+        </div>
+    );
+}
+
 export function Sidebar() {
     const location = useLocation();
     const projectMatch = location.pathname.match(/^\/project\/([^/]+)/);
     const projectId = projectMatch?.[1];
     // Don't show project nav for /project/new
     const showProjectNav = projectId && projectId !== 'new';
+
+    const seriesMatch = location.pathname.match(/^\/series\/([^/]+)/);
+    const seriesId = seriesMatch?.[1];
+    const showSeriesNav = Boolean(seriesId && seriesId !== 'new');
 
     return (
         <aside className="w-64 flex-shrink-0 bg-lemon-bg-primary lemon-textured border-r border-lemon-gray-700 flex flex-col h-full">
@@ -149,6 +210,7 @@ export function Sidebar() {
                 </NavLink>
 
                 {showProjectNav && <ProjectNav projectId={projectId} />}
+                {showSeriesNav && <SeriesNav seriesId={seriesId!} />}
             </nav>
 
             {/* Footer — Settings gear + version */}
