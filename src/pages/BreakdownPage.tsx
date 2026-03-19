@@ -42,6 +42,7 @@ const ERROR_TYPE_LABELS: Record<string, { label: string; color: string }> = {
     quota: { label: 'QUOTA', color: '#f59e0b' },
     auth:  { label: 'AUTH',  color: '#ef4444' },
     parse: { label: 'PARSE', color: '#8b5cf6' },
+    content_filter: { label: 'CONTENT FILTER', color: '#f97316' },
     unknown: { label: 'ERROR', color: '#6b7280' },
 };
 

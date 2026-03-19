@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,21 +11,37 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// Validate required config — fail loudly instead of cryptic Firebase errors
+const _required = ['apiKey', 'authDomain', 'projectId'] as const;
+for (const k of _required) {
+    if (!firebaseConfig[k]) {
+        console.error(`[Firebase] Missing env var VITE_FIREBASE_${k.replace(/([A-Z])/g, '_$1').toUpperCase()}`);
+    }
+}
+
 // Guard against double-init in dev hot-reload
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Offline support — caches Firestore reads in IndexedDB so the app
-// works on bad connections. Falls back silently in multi-tab scenarios.
-enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-        // Multiple tabs open — offline persistence only works in one tab at a time
-        console.info('[Firestore] Offline persistence disabled: multiple tabs open.');
-    } else if (err.code === 'unimplemented') {
-        // Browser doesn't support IndexedDB
-        console.info('[Firestore] Offline persistence not supported in this browser.');
-    }
+// Explicitly persist auth state in localStorage so sign-in survives page refresh
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('[Auth] Failed to set persistence:', err);
 });
+
+// Modern offline persistence — replaces deprecated enableIndexedDbPersistence().
+// Uses IndexedDB cache + multi-tab support out of the box.
+let db_instance;
+try {
+    db_instance = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+        }),
+    });
+} catch {
+    // Already initialized (e.g. hot-reload) — get existing instance via ESM import
+    db_instance = getFirestore(app);
+}
+export const db = db_instance;
+

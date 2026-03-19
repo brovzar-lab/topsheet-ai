@@ -1,14 +1,15 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, Key, DollarSign, Eye, EyeOff, CheckCircle, Brain, Upload, Trash2, ChevronDown, ChevronUp, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
 import { useMPIStore } from '@/stores/mpi-store';
-import { parseBudgetUpload } from '@/lib/budget/mpi-learner';
+import { parseBudgetUpload, SUPPORTED_EXTENSIONS } from '@/lib/budget/mpi-learner';
 import type { MPIUploadResult } from '@/types';
 
 export function SettingsPage() {
@@ -166,7 +167,9 @@ export function SettingsPage() {
 // -----------------------------------------------------------------------
 
 function MPILearnerPanel() {
-    const { learnedRecords, addRecords, clearRecords } = useMPIStore();
+    const user = useAuthStore(s => s.user);
+    const apiKey = useSettingsStore(s => s.geminiApiKey);
+    const { learnedRecords, addRecords, clearRecords, loadFromFirestore, isLoading } = useMPIStore();
     const count = learnedRecords.length;
     const sources = [...new Set(learnedRecords.map((r) => r.budgetSource))];
 
@@ -174,26 +177,46 @@ function MPILearnerPanel() {
 
     const [dragging, setDragging] = useState(false);
     const [parsing, setParsing] = useState(false);
+    const [parsePhase, setParsePhase] = useState('');
     const [lastResult, setLastResult] = useState<MPIUploadResult | null>(null);
     const [showUnmatched, setShowUnmatched] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
 
+    // Load learned records from Firestore on mount
+    useEffect(() => {
+        if (user?.uid) loadFromFirestore(user.uid);
+    }, [user?.uid, loadFromFirestore]);
+
     async function handleFile(file: File) {
-        if (!file.name.match(/\.(xlsx|csv)$/i)) {
-            alert('Please upload a .xlsx or .csv file.');
+        if (!SUPPORTED_EXTENSIONS.test(file.name)) {
+            alert('Unsupported file type. Accepted: .xlsx, .csv, .pdf, .mbb, .doc, .docx, .txt, .numbers');
+            return;
+        }
+        if (!apiKey) {
+            alert('Please configure your Gemini API key first (above).');
+            return;
+        }
+        if (!user?.uid) {
+            alert('Not signed in.');
             return;
         }
         setParsing(true);
         setLastResult(null);
         try {
-            const result = await parseBudgetUpload(file);
-            addRecords(result.matched);
+            setParsePhase('Reading spreadsheet…');
+            // Small delay so phase text renders
+            await new Promise(r => setTimeout(r, 50));
+            setParsePhase('AI extracting budget items…');
+            const result = await parseBudgetUpload(file, apiKey);
+            setParsePhase('Saving to database…');
+            await addRecords(user.uid, result.matched);
             setLastResult(result);
         } catch (err) {
             console.error('[mpi-learner] Parse error:', err);
             alert('Failed to parse the file. Check the console for details.');
         } finally {
             setParsing(false);
+            setParsePhase('');
         }
     }
 
@@ -226,7 +249,7 @@ function MPILearnerPanel() {
                 )}
             </div>
             <p className="text-xs text-lemon-text-muted mb-5">
-                Upload past budget files (.xlsx or .csv) to teach the MPI real market rates.
+                Upload past budget files to teach the MPI real market rates.
                 Learned prices are averaged and applied automatically when you generate budgets.
             </p>
 
@@ -245,63 +268,108 @@ function MPILearnerPanel() {
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".xlsx,.csv"
+                    accept=".xlsx,.csv,.pdf,.mbb,.doc,.docx,.txt,.numbers"
                     onChange={onInputChange}
                     className="hidden"
                 />
                 <Upload size={28} className={`mx-auto mb-3 ${dragging ? 'text-lemon-cyan' : 'text-lemon-gray-500'}`} />
                 {parsing ? (
-                    <p className="text-sm text-lemon-text-muted animate-pulse">Parsing & matching…</p>
+                    <p className="text-sm text-lemon-text-muted animate-pulse">{parsePhase || 'Processing…'}</p>
                 ) : (
                     <>
                         <p className="text-sm text-lemon-text-body font-display font-bold uppercase">
                             Drop a budget file here
                         </p>
                         <p className="text-xs text-lemon-text-muted mt-1">
-                            or click to browse — .xlsx · .csv
+                            or click to browse — .xlsx · .csv · .pdf · .mbb · .doc
                         </p>
                     </>
                 )}
             </div>
 
-            {/* Result summary */}
+            {/* Result summary — prominent confirmation */}
             {lastResult && (
-                <div className="mt-4 p-4 bg-lemon-bg-tertiary rounded-lg border border-lemon-gray-700">
-                    <p className="text-xs font-mono text-lemon-text-muted mb-2 truncate">
-                        {lastResult.filename} — {lastResult.totalRows} rows scanned
-                    </p>
-                    <div className="flex gap-4 mb-3">
-                        <span className="text-sm text-lemon-cyan font-display font-bold">
-                            ✓ {lastResult.matched.length} matched
-                        </span>
-                        {lastResult.unmatched.length > 0 && (
-                            <span className="text-sm text-lemon-yellow font-display font-bold">
-                                ⚠ {lastResult.unmatched.length} unmatched
-                            </span>
+                <div className={`mt-4 rounded-lg border-2 overflow-hidden transition-all ${
+                    lastResult.matched.length > 0
+                        ? 'border-lemon-cyan/50 bg-lemon-cyan/5'
+                        : 'border-lemon-yellow/50 bg-lemon-yellow/5'
+                }`}>
+                    {/* Success / Warning banner */}
+                    <div className={`px-4 py-3 flex items-center gap-3 ${
+                        lastResult.matched.length > 0
+                            ? 'bg-lemon-cyan/10'
+                            : 'bg-lemon-yellow/10'
+                    }`}>
+                        {lastResult.matched.length > 0 ? (
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-lemon-cyan/20">
+                                <CheckCircle size={18} className="text-lemon-cyan" />
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-lemon-yellow/20">
+                                <AlertTriangle size={18} className="text-lemon-yellow" />
+                            </div>
                         )}
+                        <div>
+                            <p className={`text-sm font-display font-bold ${
+                                lastResult.matched.length > 0 ? 'text-lemon-cyan' : 'text-lemon-yellow'
+                            }`}>
+                                {lastResult.matched.length > 0
+                                    ? `✓ ${lastResult.matched.length} budget items learned`
+                                    : 'No matching items found'}
+                            </p>
+                            <p className="text-xs text-lemon-text-muted">
+                                {lastResult.filename} — {lastResult.totalRows} rows scanned
+                            </p>
+                        </div>
                     </div>
 
-                    {lastResult.unmatched.length > 0 && (
-                        <>
-                            <button
-                                onClick={() => setShowUnmatched(!showUnmatched)}
-                                className="flex items-center gap-1 text-xs text-lemon-text-muted hover:text-lemon-text-body transition-colors"
-                            >
-                                {showUnmatched ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                                {showUnmatched ? 'Hide' : 'Show'} unmatched rows
-                            </button>
-                            {showUnmatched && (
-                                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-                                    {lastResult.unmatched.map((u, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-xs text-lemon-text-muted">
-                                            <AlertTriangle size={10} className="text-lemon-yellow flex-shrink-0" />
-                                            <span className="truncate">{u.row}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                    {/* Details body */}
+                    <div className="px-4 py-3 space-y-2">
+                        {/* Firebase confirmation */}
+                        {lastResult.matched.length > 0 && (
+                            <div className="flex items-center gap-2 text-xs text-lemon-cyan">
+                                <CheckCircle size={12} />
+                                <span>Saved to Firebase — available on all devices</span>
+                            </div>
+                        )}
+
+                        {/* Stats row */}
+                        <div className="flex gap-4">
+                            {lastResult.matched.length > 0 && (
+                                <span className="text-xs font-mono text-lemon-text-body">
+                                    {lastResult.matched.length} matched
+                                </span>
                             )}
-                        </>
-                    )}
+                            {lastResult.unmatched.length > 0 && (
+                                <span className="text-xs font-mono text-lemon-yellow">
+                                    {lastResult.unmatched.length} unmatched
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Unmatched expandable */}
+                        {lastResult.unmatched.length > 0 && (
+                            <>
+                                <button
+                                    onClick={() => setShowUnmatched(!showUnmatched)}
+                                    className="flex items-center gap-1 text-xs text-lemon-text-muted hover:text-lemon-text-body transition-colors"
+                                >
+                                    {showUnmatched ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                    {showUnmatched ? 'Hide' : 'Show'} unmatched rows
+                                </button>
+                                {showUnmatched && (
+                                    <div className="mt-1 max-h-40 overflow-y-auto space-y-1">
+                                        {lastResult.unmatched.map((u, i) => (
+                                            <div key={i} className="flex items-center gap-2 text-xs text-lemon-text-muted">
+                                                <AlertTriangle size={10} className="text-lemon-yellow flex-shrink-0" />
+                                                <span className="truncate">{u.row}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -330,7 +398,7 @@ function MPILearnerPanel() {
                         <div className="flex items-center gap-3">
                             <span className="text-xs text-lemon-coral">Delete all {count} learned records?</span>
                             <button
-                                onClick={() => { clearRecords(); setConfirmClear(false); setLastResult(null); }}
+                                onClick={() => { if (user?.uid) clearRecords(user.uid); setConfirmClear(false); setLastResult(null); }}
                                 className="text-xs px-3 py-1.5 bg-lemon-coral text-white font-display font-bold uppercase rounded hover:bg-lemon-coral/80 transition-colors"
                             >
                                 Yes, Clear
@@ -362,6 +430,7 @@ function MPILearnerPanel() {
 // -----------------------------------------------------------------------
 
 function ResetDataPanel() {
+    const user = useAuthStore(s => s.user);
     const clearProjects = useProjectStore((s) => s.clearAll);
     const clearBreakdowns = useBreakdownStore((s) => s.clearAll);
     const clearSchedules = useScheduleStore((s) => s.clearAll);
@@ -376,7 +445,7 @@ function ResetDataPanel() {
         clearBreakdowns();
         clearSchedules();
         clearBudgets();
-        clearMPI();
+        if (user?.uid) clearMPI(user.uid);
         // Wipe entire scenes object
         useSceneStore.setState({ scenes: {} });
         setStep('done');

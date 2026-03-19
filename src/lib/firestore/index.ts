@@ -10,12 +10,18 @@ import { useBudgetStore } from '@/stores/budget-store';
 export async function loadProjectData(uid: string, projectId: string): Promise<void> {
     setBreakdownProjectId(projectId);
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
         useSceneStore.getState().loadFromFirestore(uid, projectId),
         useBreakdownStore.getState().loadFromFirestore(uid, projectId),
         useScheduleStore.getState().loadFromFirestore(uid, projectId),
         useBudgetStore.getState().loadFromFirestore(uid, projectId),
     ]);
+
+    for (const r of results) {
+        if (r.status === 'rejected') {
+            console.error('[loadProjectData] Store hydration failed:', r.reason);
+        }
+    }
 }
 
 export * from './series';

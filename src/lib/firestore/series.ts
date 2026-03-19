@@ -6,6 +6,7 @@ import {
     getDocs,
     updateDoc,
     deleteDoc,
+    writeBatch,
     serverTimestamp,
     query,
     orderBy,
@@ -99,20 +100,38 @@ export async function updateSeries(
 }
 
 /**
- * NOT SAFE TO CALL directly — Firestore does not cascade-delete subcollections.
- * Episodes subcollection must be deleted first. Use a Cloud Function or
- * batch-delete episodes before calling this. Throws to prevent silent data orphaning.
+ * Delete a series and ALL subcollection data (episodes + roster).
+ * Firestore does not cascade-delete subcollections automatically,
+ * so we batch-delete all children first, then remove the series doc.
  */
 export async function deleteSeries(
-    // Parameters intentionally unused until subcollection deletion is implemented
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _uid: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _seriesId: string
+    uid: string,
+    seriesId: string
 ): Promise<void> {
-    throw new Error(
-        'deleteSeries: delete all episodes subcollection first. Not yet implemented.'
+    const BATCH_SIZE = 400;
+
+    // 1. Delete all episodes
+    const episodeSnap = await getDocs(episodesRef(uid, seriesId));
+    for (let i = 0; i < episodeSnap.docs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = episodeSnap.docs.slice(i, i + BATCH_SIZE);
+        for (const d of chunk) batch.delete(d.ref);
+        await batch.commit();
+    }
+
+    // 2. Delete all roster entries
+    const rosterSnap = await getDocs(
+        collection(db, 'users', uid, 'series', seriesId, 'roster')
     );
+    for (let i = 0; i < rosterSnap.docs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = rosterSnap.docs.slice(i, i + BATCH_SIZE);
+        for (const d of chunk) batch.delete(d.ref);
+        await batch.commit();
+    }
+
+    // 3. Delete the series document itself
+    await deleteDoc(seriesDocRef(uid, seriesId));
 }
 
 // ── Episodes ──────────────────────────────────────────────
@@ -178,16 +197,6 @@ export async function updateEpisode(
     });
 }
 
-// Kept to satisfy potential future direct-delete paths once subcollection
-// cleanup is wired up. Not exported intentionally.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function _deleteEpisode(
-    uid: string,
-    seriesId: string,
-    episodeId: string
-): Promise<void> {
-    await deleteDoc(episodeDocRef(uid, seriesId, episodeId));
-}
 
 // ── Roster ────────────────────────────────────────────────
 

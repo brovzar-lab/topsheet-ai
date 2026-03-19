@@ -67,3 +67,19 @@ Errors are learning opportunities. When something breaks:
 You sit between human intent (directives) and deterministic execution (Python scripts). Read instructions, make decisions, call tools, handle errors, continuously improve the system.
 
 Be pragmatic. Be reliable. Self-anneal.
+
+---
+
+## Topsheet AI — Product Rules
+
+### Film ↔ TV Parity Rule (non-negotiable)
+
+Before shipping any UI or workflow change, ask: **"Does this apply to both the Film side and the TV Episode side?"**
+
+If yes, implement on **both** in the same session. Never leave one side behind.
+
+- **Applies to both always:** upload screens, navigation elements (back buttons, breadcrumbs, settings), settings page, any global UI component, breakdown UI, schedule UI, page header patterns
+- **Film-only:** feature film budget template, single-project schedule defaults
+- **TV-only:** amortized costs, series roster, block shooting flags, episode count
+
+When in doubt, consult `.agent/skills/line-producer.skill` to determine if a workflow concept is universal to production or TV-specific.

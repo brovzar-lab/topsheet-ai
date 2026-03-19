@@ -4,7 +4,9 @@ service cloud.firestore {
     // All user data is scoped under their UID.
     // Only the authenticated user can read or write their own data.
     match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 900 * 1024; // 900KB safety margin
     }
   }
 }

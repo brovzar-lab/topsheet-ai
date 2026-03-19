@@ -26,6 +26,13 @@ export const useSettingsStore = create<SettingsState>()(
             setDefaultLanguage: (lang) => set({ defaultLanguage: lang }),
             setDefaultContingencyPercent: (percent) => set({ defaultContingencyPercent: percent }),
         }),
-        { name: 'topsheet-settings' }
+        { name: 'topsheet-settings',
+          partialize: (state) => {
+              // Exclude API key from localStorage — re-seeded from env on reload
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { geminiApiKey, ...rest } = state;
+              return rest;
+          },
+        }
     )
 );

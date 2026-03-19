@@ -6,6 +6,7 @@ import {
     bulkDeleteLineItems,
     loadDraftsForProject,
 } from '@/lib/firestore/budgets';
+import { getCurrentUid } from '@/lib/auth-state';
 
 
 interface BudgetState {
@@ -36,7 +37,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
     addDraft: (draft) => {
         set((state) => ({ drafts: [...state.drafts, draft] }));
-        const uid = _getUid();
+        const uid = getCurrentUid();
         if (!uid) return;
         // Save header + all line items
         saveDraftHeader(uid, draft)
@@ -54,7 +55,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
         }));
         const updated = get().drafts.find((d) => d.id === draftId);
         if (!updated) return;
-        const uid = _getUid();
+        const uid = getCurrentUid();
         if (!uid) return;
         // Always save the header
         saveDraftHeader(uid, updated)
@@ -167,12 +168,3 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
         }
     },
 }));
-
-function _getUid(): string | null {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
-}

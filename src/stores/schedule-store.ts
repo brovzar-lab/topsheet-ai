@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ScheduleDraft, StripboardStrip, StripColor } from '@/types';
 import type { IntExt, TimeOfDay } from '@/types';
 import { saveSchedule, loadSchedule } from '@/lib/firestore/schedules';
+import { getCurrentUid } from '@/lib/auth-state';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ interface ScheduleState {
     sortStrips: (projectId: string, sortBy: 'sceneNumber' | 'location' | 'intExt' | 'timeOfDay' | 'pageCount', direction: 'asc' | 'desc') => void;
     splitStrip: (projectId: string, dayId: string, stripId: string) => void;
     setDayDate: (projectId: string, dayId: string, date: string) => void;
+    setTargetPagesPerDay: (projectId: string, target: number) => void;
+    setScheduleSettings: (projectId: string, settings: { shootDaysPerWeek?: number; hoursPerDay?: number }) => void;
     clearAll: () => void;
     loadFromFirestore: (uid: string, projectId: string) => Promise<void>;
 }
@@ -213,6 +216,29 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
         if (s) _debouncedSync(projectId, s);
     },
 
+    setTargetPagesPerDay: (projectId, target) => {
+        set((state) => {
+            const schedule = state.schedules[projectId];
+            if (!schedule) return state;
+            return { schedules: { ...state.schedules, [projectId]: { ...schedule, targetPagesPerDay: target } } };
+        });
+        const s = get().schedules[projectId];
+        if (s) _debouncedSync(projectId, s);
+    },
+
+    setScheduleSettings: (projectId, settings) => {
+        set((state) => {
+            const schedule = state.schedules[projectId];
+            if (!schedule) return state;
+            const updated = { ...schedule };
+            if (settings.shootDaysPerWeek !== undefined) updated.shootDaysPerWeek = settings.shootDaysPerWeek;
+            if (settings.hoursPerDay !== undefined) updated.hoursPerDay = settings.hoursPerDay;
+            return { schedules: { ...state.schedules, [projectId]: updated } };
+        });
+        const s = get().schedules[projectId];
+        if (s) _debouncedSync(projectId, s);
+    },
+
     clearAll: () => set({ schedules: {} }),
 
     loadFromFirestore: async (uid, projectId) => {
@@ -234,19 +260,10 @@ const _syncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 function _debouncedSync(projectId: string, draft: ScheduleDraft): void {
     if (_syncTimers[projectId]) clearTimeout(_syncTimers[projectId]);
     _syncTimers[projectId] = setTimeout(() => {
-        const uid = _getUid();
+        const uid = getCurrentUid();
         if (!uid) return;
         saveSchedule(uid, projectId, draft)
             .then(() => useScheduleStore.setState({ lastSavedAt: Date.now() }))
             .catch(console.error);
     }, 500);
-}
-
-function _getUid(): string | null {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
 }

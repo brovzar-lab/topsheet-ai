@@ -17,6 +17,7 @@
  */
 
 import type { BudgetDraft, BudgetSection } from '@/types';
+import { getSection } from './calculator';
 
 /** Maximum EFICINE credit per project in centavos */
 const MAX_CREDIT_CENTAVOS = 2_000_000_000; // $20,000,000 MXN
@@ -70,15 +71,6 @@ export interface EFICINEResult {
         amountCentavos: number;
         reason: string;
     }[];
-}
-
-function getSection(code: string): BudgetSection {
-    const num = parseInt(code);
-    if (num < 2000) return 'ATL';
-    if (num < 3000) return 'BTL';
-    if (num < 4000) return 'POST';
-    if (num < 7000) return 'GENERAL';
-    return 'ADMIN';
 }
 
 export function calculateEFICINE(draft: BudgetDraft): EFICINEResult {

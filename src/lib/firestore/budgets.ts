@@ -6,6 +6,8 @@ import {
     getDocs,
     deleteDoc,
     writeBatch,
+    query,
+    where,
     serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -93,18 +95,16 @@ export async function loadDraftsForProject(
     uid: string,
     projectId: string
 ): Promise<BudgetDraft[]> {
-    // Load all draft headers for this project
-    const allDraftsSnap = await getDocs(
-        collection(db, 'users', uid, 'budgetDrafts')
+    // Query only drafts for this project — avoids full table scan
+    const q = query(
+        collection(db, 'users', uid, 'budgetDrafts'),
+        where('projectId', '==', projectId)
     );
-
-    const projectDraftDocs = allDraftsSnap.docs.filter(
-        (d) => d.data().projectId === projectId
-    );
+    const projectDraftDocs = await getDocs(q);
 
     // Assemble each draft with its line items
     const drafts = await Promise.all(
-        projectDraftDocs.map(async (draftDoc) => {
+        projectDraftDocs.docs.map(async (draftDoc) => {
             const header = draftDoc.data();
             const lineSnap = await getDocs(lineItemsRef(uid, draftDoc.id));
             const lineItems = lineSnap.docs.map((d) => d.data() as BudgetLineItem);

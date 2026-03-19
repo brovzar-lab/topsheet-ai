@@ -22,7 +22,7 @@ export interface BatchProgress {
 
 export type ProgressCallback = (progress: BatchProgress) => void;
 
-export type ErrorType = 'quota' | 'auth' | 'parse' | 'unknown';
+export type ErrorType = 'quota' | 'auth' | 'parse' | 'content_filter' | 'unknown';
 
 export interface FailedScene {
     sceneNumber: string;
@@ -101,10 +101,12 @@ export async function processBreakdownBatch(
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             const status = (err as { status?: number })?.status;
+            const lowerMsg = message.toLowerCase();
             const errorType: ErrorType =
-                status === 429 ? 'quota'
+                lowerMsg.includes('prohibited_content') || lowerMsg.includes('content filter blocked') ? 'content_filter'
+                : status === 429 ? 'quota'
                 : (status === 401 || status === 403) ? 'auth'
-                : message.toLowerCase().includes('parse') || message.toLowerCase().includes('json') ? 'parse'
+                : lowerMsg.includes('parse') || lowerMsg.includes('json') ? 'parse'
                 : 'unknown';
 
             console.error(`[batch-processor] ✗ ${sceneLabel} [${errorType}]: ${message}`);

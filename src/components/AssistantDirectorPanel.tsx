@@ -38,7 +38,7 @@ interface Message {
 }
 
 interface RafaAction {
-    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE';
+    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE' | 'SET_TARGET_PAGES' | 'SET_SCHEDULE_SETTINGS';
     label: string;
     payload: Record<string, unknown>;
 }
@@ -138,6 +138,20 @@ function executeAction(
             return () => useScheduleStore.getState().setDayDate(projectId, dayId, prevDate);
         }
 
+        case 'SET_TARGET_PAGES': {
+            const { targetPagesPerDay } = action.payload as { targetPagesPerDay: number };
+            const prevTarget = schedule.targetPagesPerDay;
+            store.setTargetPagesPerDay(projectId, targetPagesPerDay);
+            return () => useScheduleStore.getState().setTargetPagesPerDay(projectId, prevTarget);
+        }
+
+        case 'SET_SCHEDULE_SETTINGS': {
+            const settings = action.payload as { shootDaysPerWeek?: number; hoursPerDay?: number };
+            const prevSettings = { shootDaysPerWeek: schedule.shootDaysPerWeek, hoursPerDay: schedule.hoursPerDay };
+            store.setScheduleSettings(projectId, settings);
+            return () => useScheduleStore.getState().setScheduleSettings(projectId, prevSettings);
+        }
+
         default:
             return null;
     }
@@ -194,6 +208,26 @@ function buildSystemPrompt(
         ``,
         `SET_DAY_DATE — set a calendar date on a shoot day:`,
         `  { "type": "SET_DAY_DATE", "label": "Set Day 1 to March 24", "payload": { "dayId": "<day id>", "date": "2025-03-24" } }`,
+        ``,
+        `SET_TARGET_PAGES — change the pages-per-day target (in 1/8ths):`,
+        `  { "type": "SET_TARGET_PAGES", "label": "Set target to 3 pages/day", "payload": { "targetPagesPerDay": 24 } }`,
+        ``,
+        `SET_SCHEDULE_SETTINGS — change schedule working parameters:`,
+        `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 6-day work week", "payload": { "shootDaysPerWeek": 6 } }`,
+        `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 10-hour days", "payload": { "hoursPerDay": 10 } }`,
+    );
+
+    // ── Schedule adjustment intelligence ──
+    lines.push(
+        ``,
+        `SCHEDULE ADJUSTMENT RULES:`,
+        `When the user asks you to change schedule parameters (more days, fewer pages, different work week):`,
+        `1. First explain the impact: how it changes total weeks, daily page load, cast availability, costs.`,
+        `2. If you can make it happen, include the [ACTIONS] block.`,
+        `3. For "more days" or "fewer pages per day" requests, use SET_TARGET_PAGES to lower the target (which means more days when regenerated).`,
+        `4. For "how many weeks" questions: total_weeks = ceil(total_shoot_days / shootDaysPerWeek).`,
+        `5. Convert pages from 1/8ths to full pages for the user (divide by 8). Example: 32 eighths = 4 pages.`,
+        `6. When computing time estimates, account for rest days: calendar_days = shoot_days + ((shoot_days / shootDaysPerWeek) * (7 - shootDaysPerWeek)).`,
     );
 
     // ── Schedule data ──
@@ -207,6 +241,9 @@ function buildSystemPrompt(
         lines.push(`\n--- SCHEDULE DATA (${chatMode === 'schedule' ? 'full schedule view' : `day ${snapshot.activeDayNumber ?? 'none'} focused`}) ---`);
         lines.push(`Project: ${snapshot.projectId}`);
         lines.push(`${totalDays} shoot days | ${totalScenes} scenes | ${(totalPages / 8).toFixed(1)} total pages | target: ${(targetPPD / 8).toFixed(1)} pages/day`);
+        lines.push(`Work week: ${s.shootDaysPerWeek ?? 5} days/week | ${s.hoursPerDay ?? 12} hours/day`);
+        const estWeeks = Math.ceil(totalDays / (s.shootDaysPerWeek ?? 5));
+        lines.push(`Estimated duration: ~${estWeeks} week${estWeeks !== 1 ? 's' : ''} (${totalDays} shoot days + rest days)`);
 
         lines.push(`\nSHOOT DAY OVERVIEW:`);
         for (const day of s.shootDays) {
@@ -275,11 +312,12 @@ function getQuickPrompts(snapshot?: ScheduleSnapshot | null): string[] {
     const days = snapshot.schedule.shootDays;
     const heavy = days.filter(d => d.totalPages / 8 > 4.5);
     if (heavy.length > 0) prompts.push(`Which days are overloaded and what should I move?`);
+    prompts.push(`How many weeks will this shoot take? What's the calendar look like?`);
     prompts.push(`Are there any turnaround violations or back-to-back night shoots?`);
     prompts.push(`Which days have company moves and are they grouped efficiently?`);
     prompts.push(`What's the cast availability risk across the schedule?`);
     if (days.some(d => !d.date)) prompts.push(`Help me set calendar dates for the shoot.`);
-    return prompts.slice(0, 4);
+    return prompts.slice(0, 5);
 }
 
 // -----------------------------------------------------------------------

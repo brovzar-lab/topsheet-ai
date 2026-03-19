@@ -1,27 +1,138 @@
 /**
- * mpi-learner.ts — Parse an uploaded budget file and fuzzy-match
- * its line items against existing MPI items to create LearnedMPIRecords.
+ * mpi-learner.ts — Parse an uploaded budget file and use Gemini AI
+ * to intelligently extract line items, then match them against MPI items.
  *
- * Supports: .xlsx, .csv
- * Uses ExcelJS (already installed) for both formats.
+ * Supports: .xlsx, .csv, .pdf, .mbb (Movie Magic), .doc, .docx, .txt, .numbers
+ * Uses ExcelJS for spreadsheets, pdfjs-dist for PDFs, Gemini for smart extraction.
+ *
+ * Why AI: Real Mexican production budgets (EFICINE, STPC, EP formats) have
+ * merged cells, multi-sheet layouts, Spanish category headers, and scattered
+ * columns. Naive row scanning yields 0 matches. Gemini understands context.
  */
 
 import ExcelJS from 'exceljs';
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
+import { extractTextFromPDF } from '@/lib/parsers/pdf-parser';
+import { MPI_DATA } from '@/data/mpi-data';
 import { getAllMPIItems } from '@/data/mpi-data';
 import type { LearnedMPIRecord, MPIUploadResult } from '@/types';
 
 // -----------------------------------------------------------------------
-// Row shape after parsing the spreadsheet
+// Cell helpers (kept from original — used for serialization)
 // -----------------------------------------------------------------------
 
-interface RawBudgetRow {
-    description: string;
-    unit: string;
-    amountCentavos: number;
+function cellToText(cell: unknown): string {
+    if (cell === null || cell === undefined) return '';
+    if (typeof cell === 'string') return cell.trim();
+    if (typeof cell === 'number') return String(cell);
+    if (typeof cell === 'object' && 'text' in (cell as object)) {
+        return String((cell as { text: unknown }).text).trim();
+    }
+    if (typeof cell === 'object' && 'result' in (cell as object)) {
+        const res = (cell as { result: unknown }).result;
+        if (typeof res === 'number') return String(res);
+        if (typeof res === 'string') return res.trim();
+    }
+    return String(cell).trim();
 }
 
 // -----------------------------------------------------------------------
-// Normalise a description for matching
+// Serialize spreadsheet (Excel/CSV) → text lines for Gemini
+// -----------------------------------------------------------------------
+
+async function serializeSpreadsheet(file: File): Promise<string> {
+    const arrayBuffer = await file.arrayBuffer();
+
+    // CSV path
+    if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = new TextDecoder().decode(arrayBuffer);
+        return text.slice(0, 30_000); // cap to avoid token overflow
+    }
+
+    // XLSX path
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(arrayBuffer);
+    const lines: string[] = [];
+    let totalChars = 0;
+    const MAX_CHARS = 30_000; // ~7-8K tokens — fits comfortably in Gemini context
+
+    wb.eachSheet((ws, sheetId) => {
+        if (totalChars >= MAX_CHARS) return;
+        lines.push(`\n=== SHEET ${sheetId}: "${ws.name}" ===`);
+
+        ws.eachRow((row) => {
+            if (totalChars >= MAX_CHARS) return;
+            const cells = row.values as unknown[];
+            // cells[0] is undefined (ExcelJS 1-indexed)
+            const parts: string[] = [];
+            for (let i = 1; i < cells.length; i++) {
+                const text = cellToText(cells[i]);
+                if (text) parts.push(text);
+            }
+            if (parts.length > 0) {
+                const line = parts.join(' | ');
+                lines.push(line);
+                totalChars += line.length;
+            }
+        });
+    });
+
+    return lines.join('\n');
+}
+
+// -----------------------------------------------------------------------
+// Serialize PDF → text for Gemini
+// -----------------------------------------------------------------------
+
+async function serializePDF(file: File): Promise<string> {
+    const result = await extractTextFromPDF(file);
+    // Cap to ~30K chars to avoid token overflow
+    return result.text.slice(0, 30_000);
+}
+
+// -----------------------------------------------------------------------
+// Serialize any text-based doc → raw text for Gemini
+// -----------------------------------------------------------------------
+
+async function serializeTextDoc(file: File): Promise<string> {
+    const arrayBuffer = await file.arrayBuffer();
+    const text = new TextDecoder().decode(arrayBuffer);
+    return text.slice(0, 30_000);
+}
+
+// -----------------------------------------------------------------------
+// File router — dispatch to the right serializer
+// -----------------------------------------------------------------------
+
+const SUPPORTED_EXTENSIONS = /\.(xlsx|csv|pdf|mbb|doc|docx|txt|numbers)$/i;
+
+async function serializeFile(file: File): Promise<string> {
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith('.xlsx')) return serializeSpreadsheet(file);
+    if (name.endsWith('.csv')) return serializeSpreadsheet(file);
+    if (name.endsWith('.pdf')) return serializePDF(file);
+    // Movie Magic .mbb, .doc, .docx, .txt, .numbers — attempt text extraction
+    // Binary formats (.mbb, .doc, .numbers) may produce garbled output;
+    // Gemini is surprisingly good at finding structured data in noise.
+    if (name.endsWith('.txt')) return serializeTextDoc(file);
+    // For binary docs (.mbb, .doc, .docx, .numbers), try text extraction
+    // and send whatever we get — Gemini can often parse partial text from binary
+    return serializeTextDoc(file);
+}
+
+// -----------------------------------------------------------------------
+// Build MPI category context for the prompt
+// -----------------------------------------------------------------------
+
+function buildCategoryContext(): string {
+    return MPI_DATA.map(cat =>
+        `${cat.code} ${cat.name} (${cat.nameEs}): ${cat.items.slice(0, 5).map(i => i.item).join(', ')}${cat.items.length > 5 ? '...' : ''}`
+    ).join('\n');
+}
+
+// -----------------------------------------------------------------------
+// Fuzzy match: token overlap ratio (Jaccard-like) — used as fallback
 // -----------------------------------------------------------------------
 
 function normalise(text: string): string[] {
@@ -31,10 +142,6 @@ function normalise(text: string): string[] {
         .split(/\s+/)
         .filter((t) => t.length > 2);
 }
-
-// -----------------------------------------------------------------------
-// Fuzzy match: token overlap ratio (Jaccard-like)
-// -----------------------------------------------------------------------
 
 function similarity(a: string, b: string): number {
     const ta = new Set(normalise(a));
@@ -47,13 +154,17 @@ function similarity(a: string, b: string): number {
     return overlap / Math.max(ta.size, tb.size);
 }
 
-const MATCH_THRESHOLD = 0.3;
+const MATCH_THRESHOLD = 0.25;
 
 function bestMatch(description: string) {
     const allItems = getAllMPIItems();
     let best = { item: allItems[0]!, score: 0 };
     for (const mpi of allItems) {
-        const score = similarity(description, mpi.item);
+        // Match against both the MPI item name and any Spanish aliases
+        const score = Math.max(
+            similarity(description, mpi.item),
+            similarity(description, mpi.notes || ''),
+        );
         if (score > best.score) {
             best = { item: mpi, score };
         }
@@ -62,128 +173,160 @@ function bestMatch(description: string) {
 }
 
 // -----------------------------------------------------------------------
-// Cell → number helper
+// Gemini extraction
 // -----------------------------------------------------------------------
 
-function cellToNumber(cell: ExcelJS.Cell): number | null {
-    const v = cell.value;
-    if (v === null || v === undefined) return null;
-    if (typeof v === 'number') return v;
-    if (typeof v === 'string') {
-        const cleaned = v.replace(/[$,\s]/g, '');
-        const n = parseFloat(cleaned);
-        return isNaN(n) ? null : n;
-    }
-    // ExcelJS rich text / formula result
-    if (typeof v === 'object' && 'result' in (v as object)) {
-        const res = (v as { result: unknown }).result;
-        if (typeof res === 'number') return res;
-    }
-    return null;
+interface GeminiExtractedItem {
+    description: string;
+    category_code: string;
+    amount_mxn: number;
+    unit: string;
+    confidence: number;
 }
 
-function cellToText(cell: ExcelJS.Cell): string {
-    const v = cell.value;
-    if (v === null || v === undefined) return '';
-    if (typeof v === 'string') return v.trim();
-    if (typeof v === 'number') return String(v);
-    if (typeof v === 'object' && 'text' in (v as object)) {
-        return String((v as { text: unknown }).text).trim();
-    }
-    return String(v).trim();
-}
-
-// -----------------------------------------------------------------------
-// Parse .xlsx / .csv into raw rows
-// -----------------------------------------------------------------------
-
-async function parseRows(file: File): Promise<RawBudgetRow[]> {
-    const arrayBuffer = await file.arrayBuffer();
-    const wb = new ExcelJS.Workbook();
-
-    if (file.name.toLowerCase().endsWith('.csv')) {
-        // ExcelJS csv read expects a stream; convert buffer → blob → stream
-        const csvText = new TextDecoder().decode(arrayBuffer);
-        const lines = csvText.split(/\r?\n/).filter((l) => l.trim());
-        const rows: RawBudgetRow[] = [];
-        for (const line of lines) {
-            const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
-            if (parts.length < 2) continue;
-            const description = parts[0] ?? '';
-            // Try to find the last numeric column as the amount
-            let amount: number | null = null;
-            for (let i = parts.length - 1; i >= 1; i--) {
-                const n = parseFloat((parts[i] ?? '').replace(/[$,\s]/g, ''));
-                if (!isNaN(n) && n > 0) { amount = n; break; }
-            }
-            if (!description || amount === null) continue;
-            const unit = parts.length > 2 ? (parts[1] ?? '') : 'flat';
-            rows.push({ description, unit, amountCentavos: Math.round(amount * 100) });
-        }
-        return rows;
-    }
-
-    // XLSX
-    await wb.xlsx.load(arrayBuffer);
-    const rows: RawBudgetRow[] = [];
-
-    // Scan all worksheets
-    wb.eachSheet((ws) => {
-        ws.eachRow((row) => {
-            const cells = row.values as ExcelJS.Cell[];
-            // cells[0] is undefined (ExcelJS is 1-indexed)
-            const descCell = cells[1];
-            if (!descCell) return;
-            const description = cellToText(descCell);
-            if (!description || description.length < 3) return;
-
-            // Look for the last numeric cell in the row as amount
-            let amount: number | null = null;
-            let unit = 'flat';
-            for (let i = cells.length - 1; i >= 2; i--) {
-                const n = cellToNumber(cells[i]!);
-                if (n !== null && n > 1) { amount = n; break; }
-            }
-            // Try to get unit from 3rd column
-            if (cells[3]) unit = cellToText(cells[3]) || 'flat';
-
-            if (amount === null || amount <= 0) return;
-            rows.push({ description, unit, amountCentavos: Math.round(amount * 100) });
-        });
+async function extractWithGemini(
+    apiKey: string,
+    serializedContent: string,
+    filename: string,
+): Promise<{ items: GeminiExtractedItem[]; totalRows: number }> {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+        },
+        safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ],
     });
 
-    return rows;
+    const categoryContext = buildCategoryContext();
+
+    const prompt = `You are an expert Mexican film/TV line producer. You are reading a production budget spreadsheet.
+
+TASK: Extract every identifiable budget line item with its cost from this data. The data comes from a real Mexican production budget file "${filename}".
+
+BUDGET CATEGORY CODES (use these to classify each item):
+${categoryContext}
+
+SPREADSHEET DATA:
+---
+${serializedContent}
+---
+
+RULES:
+1. Extract ONLY items that have a clear cost/amount in MXN pesos
+2. Skip headers, subtotals, grand totals, percentages, and empty categories
+3. For each item, identify the most relevant budget category code
+4. The "description" should be the position/service name, normalized to English (e.g., "Director de Fotografía" → "Director of Photography")
+5. "unit" should be: Week, Day, Flat, Month, Hour, Unit, or % — infer from context
+6. "confidence" is your confidence in the match (0.0 to 1.0)
+7. Look across ALL sheets — Mexican budgets often split ATL/BTL/Post across sheets
+8. Handle merged cells — the description might be several rows above the amount
+9. Amounts are in MXN unless explicitly stated otherwise
+
+Return ONLY this JSON structure:
+{
+  "items": [
+    {
+      "description": "English-normalized position/service name",
+      "category_code": "2000",
+      "amount_mxn": 30000,
+      "unit": "Week",
+      "confidence": 0.9
+    }
+  ],
+  "total_rows_scanned": 150
+}`;
+
+    const result = await model.generateContent(prompt);
+    let text = result.response.text().trim();
+    // Strip markdown fences if present
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+
+    try {
+        const parsed = JSON.parse(text) as {
+            items: GeminiExtractedItem[];
+            total_rows_scanned?: number;
+        };
+        return {
+            items: Array.isArray(parsed.items) ? parsed.items : [],
+            totalRows: parsed.total_rows_scanned ?? 0,
+        };
+    } catch (e) {
+        console.error('[mpi-learner] Failed to parse Gemini response:', text.substring(0, 300), e);
+        return { items: [], totalRows: 0 };
+    }
 }
 
 // -----------------------------------------------------------------------
 // Main entry point
 // -----------------------------------------------------------------------
 
-export async function parseBudgetUpload(file: File): Promise<MPIUploadResult> {
-    const rows = await parseRows(file);
+export { SUPPORTED_EXTENSIONS };
+
+export async function parseBudgetUpload(
+    file: File,
+    apiKey: string,
+): Promise<MPIUploadResult> {
     const filename = file.name;
     const now = new Date().toISOString();
 
+    // Step 1: Serialize file content (Excel, PDF, CSV, text, Movie Magic)
+    const serialized = await serializeFile(file);
+
+    if (!serialized.trim()) {
+        return { matched: [], unmatched: [], totalRows: 0, filename };
+    }
+
+    // Step 2: Extract with Gemini AI
+    const extraction = await extractWithGemini(apiKey, serialized, filename);
+
+    // Step 3: Match extracted items against MPI
     const matched: LearnedMPIRecord[] = [];
     const unmatched: { row: string; amountCentavos: number }[] = [];
 
-    for (const row of rows) {
-        const match = bestMatch(row.description);
+    for (const item of extraction.items) {
+        if (item.confidence < 0.3) {
+            unmatched.push({
+                row: item.description,
+                amountCentavos: Math.round(item.amount_mxn * 100),
+            });
+            continue;
+        }
+
+        // Try fuzzy match against MPI items
+        const match = bestMatch(item.description);
+
         if (match) {
             matched.push({
                 id: crypto.randomUUID(),
                 mpiItemId: match.item.id,
                 categoryCode: match.item.categoryCode,
                 itemName: match.item.item,
-                costCentavos: row.amountCentavos,
-                unit: row.unit || match.item.unit,
+                costCentavos: Math.round(item.amount_mxn * 100),
+                unit: item.unit || match.item.unit,
                 budgetSource: filename,
                 uploadedAt: now,
             });
         } else {
-            unmatched.push({ row: row.description, amountCentavos: row.amountCentavos });
+            // No MPI match — still record with Gemini's category
+            unmatched.push({
+                row: `${item.description} (${item.category_code})`,
+                amountCentavos: Math.round(item.amount_mxn * 100),
+            });
         }
     }
 
-    return { matched, unmatched, totalRows: rows.length, filename };
+    return {
+        matched,
+        unmatched,
+        totalRows: extraction.totalRows || extraction.items.length,
+        filename,
+    };
 }

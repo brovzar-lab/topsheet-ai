@@ -6,6 +6,7 @@ import {
     type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
+import { setCurrentUid } from '@/lib/auth-state';
 
 interface AuthState {
     user: User | null;
@@ -38,7 +39,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
     },
 
-    _setUser: (user) => set({ user }),
+    _setUser: (user) => {
+        setCurrentUid(user?.uid ?? null);
+        set({ user });
+    },
     _setLoading: (isLoading) => set({ isLoading }),
 }));
 

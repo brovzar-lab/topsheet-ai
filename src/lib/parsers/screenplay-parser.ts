@@ -41,6 +41,7 @@ const TIME_OF_DAY_KEYWORDS: Record<string, TimeOfDay> = {
     'DÍA': 'DÍA', 'DIA': 'DÍA', 'NOCHE': 'NOCHE',
     'TARDE': 'TARDE',
     'ATARDECER': 'ATARDECER', 'AMANECER': 'AMANECER', 'MADRUGADA': 'MADRUGADA',
+    'ANOCHECER': 'NOCHE', 'ENTRADA': 'DÍA', 'ENTRADA DE DÍA': 'DÍA',
     'CONTINUO': 'CONTINUO', 'DESPUÉS': 'DESPUÉS', 'DESPUES': 'DESPUÉS',
     'MISMO TIEMPO': 'MISMO TIEMPO',
 };
@@ -110,7 +111,12 @@ function parseLocationAndTime(rest: string): { location: string; subLocation?: s
 
 function lookupTimeOfDay(raw: string): TimeOfDay | null {
     const upper = raw.toUpperCase().trim();
-    return TIME_OF_DAY_KEYWORDS[upper] ?? null;
+    // Exact match first
+    if (TIME_OF_DAY_KEYWORDS[upper]) return TIME_OF_DAY_KEYWORDS[upper]!;
+    // Strip trailing digits, periods, and whitespace (e.g. "AMANECER1", "NOCHE.", "DIA 2")
+    const cleaned = upper.replace(/[\d.]+$/, '').trim();
+    if (cleaned && TIME_OF_DAY_KEYWORDS[cleaned]) return TIME_OF_DAY_KEYWORDS[cleaned]!;
+    return null;
 }
 
 function splitLocation(raw: string): { location: string; subLocation?: string } {

@@ -16,6 +16,8 @@ export interface ScheduleConflict {
     type: 'cast_double_book' | 'day_overloaded' | 'cast_unscheduled' | 'empty_day';
     severity: ConflictSeverity;
     message: string;
+    /** Affected day number (for UI scroll-to) */
+    dayNumber?: number;
     /** Affected resources (day IDs, character names, strip IDs) */
     entities: string[];
 }
@@ -34,6 +36,7 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
                 type: 'day_overloaded',
                 severity: day.totalPages > schedule.targetPagesPerDay * 1.5 ? 'error' : 'warning',
                 message: `Day ${day.dayNumber} has ${pagesDisplay} pages (target: ${targetDisplay})`,
+                dayNumber: day.dayNumber,
                 entities: [day.id],
             });
         }
@@ -47,6 +50,7 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
                 type: 'empty_day',
                 severity: 'info',
                 message: `Day ${day.dayNumber} has no scenes assigned`,
+                dayNumber: day.dayNumber,
                 entities: [day.id],
             });
         }
@@ -72,11 +76,13 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
     for (const [key, val] of dateCharMap) {
         if (val.dayNumbers.size > 1) {
             const [date, char] = key.split('::');
+            const firstDay = [...val.dayNumbers][0];
             conflicts.push({
                 id: `conflict_${conflictId++}`,
                 type: 'cast_double_book',
                 severity: 'error',
                 message: `${char} is scheduled on multiple days for ${date} (Days ${[...val.dayNumbers].join(', ')})`,
+                dayNumber: firstDay,
                 entities: [char!, ...val.dayIds],
             });
         }
@@ -106,6 +112,7 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
                         type: 'cast_double_book',
                         severity: 'warning',
                         message: `${char} works ${consecutive}+ consecutive days (Day ${sorted[i - consecutive + 1]} → ${sorted[i]})`,
+                        dayNumber: sorted[i - consecutive + 1],
                         entities: [char],
                     });
                     break;

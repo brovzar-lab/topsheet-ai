@@ -69,13 +69,15 @@ function buildStrips(
 }
 
 // -----------------------------------------------------------------------
-// Group strips by location
+// Group strips by location + day/night
 // -----------------------------------------------------------------------
 
 function groupByLocation(strips: StripboardStrip[]): Map<string, StripboardStrip[]> {
     const groups = new Map<string, StripboardStrip[]>();
     for (const strip of strips) {
-        const key = strip.location.toUpperCase().trim() || 'UNKNOWN';
+        // Separate DAY and NIGHT scenes at the same location — industry practice
+        const isNight = isNightTime(strip.timeOfDay);
+        const key = `${strip.location.toUpperCase().trim() || 'UNKNOWN'}::${isNight ? 'NIGHT' : 'DAY'}`;
         const existing = groups.get(key) ?? [];
         existing.push(strip);
         groups.set(key, existing);
@@ -158,6 +160,10 @@ export interface AutoScheduleOptions {
     projectId: string;
     /** Target pages per day in 1/8ths. Default: 32 (= 4 pages). */
     targetPagesPerDay?: number;
+    /** Shoot days per week. Default: 5 (Mon-Fri). */
+    shootDaysPerWeek?: number;
+    /** Target work hours per day. Default: 12. */
+    hoursPerDay?: number;
 }
 
 /**
@@ -175,6 +181,8 @@ export function generateSchedule(
     options: AutoScheduleOptions,
 ): ScheduleDraft {
     const targetPages = options.targetPagesPerDay ?? 32; // 4 pages in 1/8ths
+    const shootDaysPerWeek = options.shootDaysPerWeek ?? 5;
+    const hoursPerDay = options.hoursPerDay ?? 12;
 
     // 1. Build strips
     const strips = buildStrips(scenes, breakdowns);
@@ -207,6 +215,8 @@ export function generateSchedule(
         shootDays,
         bannerStrips: [],
         targetPagesPerDay: targetPages,
+        shootDaysPerWeek,
+        hoursPerDay,
         createdAt: new Date().toISOString(),
         notes: `Auto-generated: ${shootDays.length} days, ${scenes.length} scenes, ${locationGroups.size} locations`,
     };

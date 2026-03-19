@@ -13,6 +13,19 @@ import type { BreakdownElement } from '@/types';
 import { buildBreakdownPrompt, validateElement } from './prompts/breakdown';
 
 // -----------------------------------------------------------------------
+// Cached Gemini client — reuse across calls to avoid creating new HTTP pools
+// -----------------------------------------------------------------------
+
+let _cachedClient: { key: string; instance: GoogleGenerativeAI } | null = null;
+
+function getClient(apiKey: string): GoogleGenerativeAI {
+    if (_cachedClient?.key === apiKey) return _cachedClient.instance;
+    const instance = new GoogleGenerativeAI(apiKey);
+    _cachedClient = { key: apiKey, instance };
+    return instance;
+}
+
+// -----------------------------------------------------------------------
 // Script Analysis (initial upload card)
 // -----------------------------------------------------------------------
 
@@ -42,7 +55,7 @@ export async function analyzeScript(
     pageCount: number,
     filenameTitle: string,
 ): Promise<ScriptAnalysis> {
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = getClient(apiKey);
     const model = genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
         generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
@@ -120,7 +133,7 @@ const MODEL_NAME = 'gemini-2.5-flash';
  * Create a Gemini model tuned for structured breakdown extraction.
  */
 export function createBreakdownModel(apiKey: string): GenerativeModel {
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = getClient(apiKey);
 
     return genAI.getGenerativeModel({
         model: MODEL_NAME,
@@ -142,9 +155,8 @@ export function createBreakdownModel(apiKey: string): GenerativeModel {
 // Breakdown generation
 // -----------------------------------------------------------------------
 
-let _idCounter = 0;
 function nextId(): string {
-    return `el_${Date.now()}_${++_idCounter}`;
+    return `el_${crypto.randomUUID()}`;
 }
 
 /**
@@ -169,16 +181,38 @@ export async function generateSceneBreakdown(
                 systemInstruction: { role: 'model', parts: [{ text: systemPrompt }] },
             });
 
-            const text = result.response.text();
+            // Detect content-blocked responses before calling .text()
+            const response = result.response;
+            const blockReason = response.promptFeedback?.blockReason;
+            const finishReason = response.candidates?.[0]?.finishReason;
+
+            if (blockReason || finishReason === 'SAFETY') {
+                throw new Error(
+                    `Content filter blocked scene ${sceneNumber}: ` +
+                    `${blockReason || finishReason} — ` +
+                    `the screenplay text triggered Gemini's safety filter (PROHIBITED_CONTENT). ` +
+                    `This is fictional screenplay content; try retrying or editing the scene text.`
+                );
+            }
+
+            const text = response.text();
             return parseBreakdownResponse(text);
         } catch (err: unknown) {
             lastError = err;
+            const message = err instanceof Error ? err.message : String(err);
             const status = (err as { status?: number })?.status;
-            if (attempt === 0 && (status === 429 || status === 500)) {
-                // Wait 2s before retry
+
+            // Retry on rate-limit or server error
+            if (attempt === 0 && (status === 429 || status === 500 || status === 503)) {
                 await sleep(2000);
                 continue;
             }
+
+            // Content-filter errors — no retry will help
+            if (message.includes('PROHIBITED_CONTENT') || message.includes('blocked')) {
+                throw err;
+            }
+
             throw err;
         }
     }

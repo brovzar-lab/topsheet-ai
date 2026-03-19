@@ -60,8 +60,6 @@ export function estimateShootDays(totalPages: number): number {
 // Auto-budget generation
 // -----------------------------------------------------------------------
 
-let _lineItemId = 0;
-
 function makeLineItem(
     categoryCode: BudgetCategoryCode,
     description: string,
@@ -72,7 +70,7 @@ function makeLineItem(
     mpiItemId?: string,
 ): BudgetLineItem {
     return {
-        id: `li_${++_lineItemId}_${Date.now()}`,
+        id: crypto.randomUUID(),
         categoryCode,
         description,
         unit,

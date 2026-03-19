@@ -62,7 +62,7 @@ export function SeriesNewPage() {
         // runtimeTemplate is derived by the Firestore layer — do not pass it here
         pilotDesignated,
       };
-      const seriesId = await createSeries(input);
+      const seriesId = await createSeries(user.uid, input);
       navigate(`/series/${seriesId}`);
     } catch (e) {
       setError(String(e));
@@ -157,9 +157,9 @@ export function SeriesNewPage() {
                 onChange={e => setTier(e.target.value as ProductionTier)}
                 className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
               >
-                <option value="low">Low (MXN 2–10M)</option>
-                <option value="mid">Mid (MXN 10–30M)</option>
-                <option value="premium">Premium (MXN 30M+)</option>
+                <option value="low">Low (MXN 5–8M / ep)</option>
+                <option value="mid">Mid (MXN 10–20M / ep)</option>
+                <option value="premium">Premium (MXN 40M+ / ep)</option>
               </select>
             </div>
           </div>
@@ -175,41 +175,19 @@ export function SeriesNewPage() {
           {/* Episode count */}
           <div>
             <label className="lemon-label block mb-2">Number of Episodes</label>
-            <div className="flex gap-3 items-start flex-wrap">
-              <div className="flex border border-lemon-gray-700 rounded overflow-hidden focus-within:border-lemon-cyan transition-colors">
+            <div className="flex gap-1.5 flex-wrap">
+              {EP_COUNT_PRESETS.map(n => (
                 <button
+                  key={n}
                   type="button"
-                  onClick={() => setEpisodeCount(c => Math.max(1, c - 1))}
-                  className="w-10 h-10 bg-lemon-bg-elevated text-lemon-gray-400 hover:text-lemon-text-primary hover:bg-lemon-bg-primary transition-colors text-lg"
-                >−</button>
-                <input
-                  type="number"
-                  value={episodeCount}
-                  onChange={e => setEpisodeCount(Math.max(1, Math.min(100, Number(e.target.value))))}
-                  className="w-16 bg-transparent text-center font-display font-black text-2xl text-lemon-text-primary outline-none"
-                  min={1} max={100}
-                />
-                <span className="flex items-center pr-3 font-mono text-[0.6rem] text-lemon-gray-600 uppercase tracking-wider">eps</span>
-                <button
-                  type="button"
-                  onClick={() => setEpisodeCount(c => Math.min(100, c + 1))}
-                  className="w-10 h-10 bg-lemon-bg-elevated text-lemon-gray-400 hover:text-lemon-text-primary hover:bg-lemon-bg-primary transition-colors text-lg"
-                >+</button>
-              </div>
-              <div className="flex gap-1.5 flex-wrap pt-0.5">
-                {EP_COUNT_PRESETS.map(n => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setEpisodeCount(n)}
-                    className={`px-3 py-2 font-mono text-[0.65rem] font-bold border rounded transition-colors ${
-                      episodeCount === n
-                        ? 'bg-lemon-cyan/10 border-lemon-cyan/40 text-lemon-cyan'
-                        : 'border-lemon-gray-700 text-lemon-gray-500 hover:text-lemon-text-body hover:border-lemon-gray-500'
-                    }`}
-                  >{n}</button>
-                ))}
-              </div>
+                  onClick={() => setEpisodeCount(n)}
+                  className={`px-4 py-2 font-mono text-[0.65rem] font-bold border rounded transition-colors ${
+                    episodeCount === n
+                      ? 'bg-lemon-cyan/10 border-lemon-cyan/40 text-lemon-cyan'
+                      : 'border-lemon-gray-700 text-lemon-gray-500 hover:text-lemon-text-body hover:border-lemon-gray-500'
+                  }`}
+                >{n} eps</button>
+              ))}
             </div>
           </div>
 

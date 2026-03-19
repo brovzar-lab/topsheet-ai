@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import type { Scene } from '@/types';
 import { saveScenes, loadScenes } from '@/lib/firestore/scenes';
+import { getCurrentUid } from '@/lib/auth-state';
 
 const EMPTY_SCENES: Scene[] = [];
 
 interface SceneState {
     scenes: Record<string, Scene[]>;
+    lastSavedAt: number | null;
     setScenes: (projectId: string, scenes: Scene[]) => void;
     getScenes: (projectId: string) => Scene[];
     clearScenes: (projectId: string) => void;
@@ -15,14 +17,17 @@ interface SceneState {
 
 export const useSceneStore = create<SceneState>((set, get) => ({
     scenes: {},
+    lastSavedAt: null,
 
     setScenes: (projectId, scenes) => {
         set((state) => ({
             scenes: { ...state.scenes, [projectId]: scenes },
         }));
         // Save immediately — only called on PDF import, not on every interaction
-        const uid = _getUid();
-        if (uid) saveScenes(uid, projectId, scenes).catch(console.error);
+        const uid = getCurrentUid();
+        if (uid) saveScenes(uid, projectId, scenes)
+            .then(() => set({ lastSavedAt: Date.now() }))
+            .catch(console.error);
     },
 
     getScenes: (projectId) => get().scenes[projectId] ?? EMPTY_SCENES,
@@ -48,12 +53,3 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         }
     },
 }));
-
-function _getUid(): string | null {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
-}

@@ -34,6 +34,7 @@ import {
     Check,
     Pencil,
     Scissors,
+    Clock,
 } from 'lucide-react';
 import type { StripboardStrip, ShootDay, SceneBreakdown } from '@/types';
 import { useSceneStore } from '@/stores/scene-store';
@@ -42,7 +43,7 @@ import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { detectConflicts } from '@/lib/schedule/conflict-detector';
 import { getCategoryById } from '@/data/element-categories';
-import { AssistantDirectorPanel, type ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+import { AssistantDirectorPanel, type ADPanelContext } from '@/components/AssistantDirectorPanel';
 
 // -----------------------------------------------------------------------
 // TV schedule helpers
@@ -653,10 +654,12 @@ export function SchedulePage() {
     const sortStrips = useScheduleStore((s) => s.sortStrips);
     const splitStripAction = useScheduleStore((s) => s.splitStrip);
     const setDayDate = useScheduleStore((s) => s.setDayDate);
+    const setScheduleSettings = useScheduleStore((s) => s.setScheduleSettings);
 
     // State for the AD panel
     const [activeDayNumber, setActiveDayNumber] = useState<number | null>(null);
     const [adPanelOpen, setAdPanelOpen] = useState(true);
+    const [adContext, setAdContext] = useState<ADPanelContext | null>(null);
     const [activeStrip, setActiveStrip] = useState<StripboardStrip | null>(null);
 
     // Expanded strip for synopsis
@@ -984,6 +987,42 @@ export function SchedulePage() {
                 <span className="ml-4 font-mono text-[0.6rem] text-lemon-text-muted italic">
                     Click strip to see synopsis • Double-click location to edit
                 </span>
+
+                {/* Schedule Settings */}
+                {schedule && (
+                    <div className="ml-auto flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                            <Clock size={10} className="text-lemon-text-muted" />
+                            <span className="font-mono text-[0.6rem] text-lemon-text-muted">hrs/day</span>
+                            <input
+                                type="number"
+                                min={6}
+                                max={18}
+                                value={schedule.hoursPerDay ?? 12}
+                                onChange={(e) => {
+                                    const v = Math.max(6, Math.min(18, parseInt(e.target.value) || 12));
+                                    setScheduleSettings(projectId, { hoursPerDay: v });
+                                }}
+                                className="w-10 bg-lemon-bg-elevated border border-lemon-gray-600 rounded px-1 py-0.5 text-[0.6rem] font-mono text-lemon-text-body text-center outline-none focus:border-lemon-cyan"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <CalendarDays size={10} className="text-lemon-text-muted" />
+                            <span className="font-mono text-[0.6rem] text-lemon-text-muted">days/wk</span>
+                            <input
+                                type="number"
+                                min={4}
+                                max={7}
+                                value={schedule.shootDaysPerWeek ?? 5}
+                                onChange={(e) => {
+                                    const v = Math.max(4, Math.min(7, parseInt(e.target.value) || 5));
+                                    setScheduleSettings(projectId, { shootDaysPerWeek: v });
+                                }}
+                                className="w-10 bg-lemon-bg-elevated border border-lemon-gray-600 rounded px-1 py-0.5 text-[0.6rem] font-mono text-lemon-text-body text-center outline-none focus:border-lemon-cyan"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Conflict Detection Panel ── */}
@@ -1011,12 +1050,25 @@ export function SchedulePage() {
                         </div>
                         <div className="space-y-0.5 max-h-24 overflow-y-auto">
                             {conflicts.map((c) => (
-                                <div key={c.id} className={`font-mono text-[0.6rem] flex items-center gap-1.5 ${c.severity === 'error' ? 'text-red-400' :
-                                    c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
-                                    }`}>
+                                <button
+                                    key={c.id}
+                                    onClick={() => {
+                                        // Find the affected day number
+                                        const dayNum = c.dayNumber ?? null;
+                                        if (dayNum) setActiveDayNumber(dayNum);
+                                        // Open Rafa with context
+                                        setAdContext({ dayNumber: dayNum ?? 0, issue: c.message });
+                                        setAdPanelOpen(true);
+                                    }}
+                                    className={`w-full text-left font-mono text-[0.6rem] flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors cursor-pointer
+                                        hover:bg-lemon-bg-elevated/60 ${c.severity === 'error' ? 'text-red-400' :
+                                        c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
+                                        }`}
+                                >
                                     <span>{c.severity === 'error' ? '🔴' : c.severity === 'warning' ? '🟡' : 'ℹ️'}</span>
-                                    {c.message}
-                                </div>
+                                    <span className="flex-1">{c.message}</span>
+                                    <ChevronRight size={10} className="opacity-40 flex-shrink-0" />
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -1083,6 +1135,7 @@ export function SchedulePage() {
                     projectId={projectId}
                     isOpen={adPanelOpen}
                     onToggle={() => setAdPanelOpen(v => !v)}
+                    context={adContext}
                     snapshot={schedule ? {
                         projectId,
                         schedule,

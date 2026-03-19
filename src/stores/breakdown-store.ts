@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { SceneBreakdown, BreakdownElement } from '@/types';
 import { saveBreakdown, loadBreakdown } from '@/lib/firestore/breakdowns';
+import { getCurrentUid } from '@/lib/auth-state';
 
 interface BreakdownState {
     breakdowns: Record<string, SceneBreakdown>;
@@ -139,21 +140,15 @@ export const useBreakdownStore = create<BreakdownState>((set, get) => ({
 let _syncTimer: ReturnType<typeof setTimeout> | null = null;
 
 function _debouncedSync(breakdowns: Record<string, SceneBreakdown>): void {
+    // Capture projectId at CALL time — not at fire time — to prevent
+    // saving to the wrong project if user switches mid-debounce.
+    const projectId = _activeProjectId;
     if (_syncTimer) clearTimeout(_syncTimer);
     _syncTimer = setTimeout(() => {
-        const uid = _getUid();
-        if (!uid || !_activeProjectId) return;
-        saveBreakdown(uid, _activeProjectId, breakdowns)
+        const uid = getCurrentUid();
+        if (!uid || !projectId) return;
+        saveBreakdown(uid, projectId, breakdowns)
             .then(() => useBreakdownStore.setState({ lastSavedAt: Date.now() }))
             .catch(console.error);
     }, 1000);
-}
-
-function _getUid(): string | null {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
 }
