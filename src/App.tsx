@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { AuthGate } from './components/AuthGate';
@@ -25,6 +25,19 @@ import { useProjectStore } from './stores/project-store';
 import { useSeriesStore } from './stores/series-store';
 import { ProjectLoader } from './components/ProjectLoader';
 
+
+const VALID_TABS = ['breakdown', 'schedule', 'budget', 'doods', 'elements', 'calendar'] as const;
+
+/** Catch-all inside /project/:id/* — redirect any unknown tab to breakdown. */
+function InvalidTabRedirect() {
+    const location = useLocation();
+    // Strip the trailing segment (the invalid tab) to get the project base path
+    const basePath = location.pathname.replace(/\/[^/]*$/, '');
+    return <Navigate to={`${basePath}/breakdown${location.search}`} replace />;
+}
+
+// VALID_TABS is used as an allowlist reference; the Route catch-all enforces it at the router level.
+void VALID_TABS;
 
 export default function App() {
     const location = useLocation();
@@ -73,6 +86,7 @@ export default function App() {
                                             <Route path="doods" element={<DOODsPage />} />
                                             <Route path="elements" element={<ElementsPage />} />
                                             <Route path="calendar" element={<CalendarPage />} />
+                                            <Route path="*" element={<InvalidTabRedirect />} />
                                         </Routes>
                                     </ProjectLoader>
                                 </ErrorBoundary>

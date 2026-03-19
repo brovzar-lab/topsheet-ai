@@ -12,9 +12,8 @@ import { Users, ArrowLeft } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSeriesStore } from '@/stores/series-store';
-
-// Status codes
-type DOODStatus = 'W' | 'SW' | 'WF' | 'SWF' | 'H' | '';
+import { buildDoodMatrix } from '@/lib/schedule/dood-matrix';
+import type { DOODStatus } from '@/lib/schedule/dood-matrix';
 
 const STATUS_COLORS: Record<DOODStatus, { bg: string; text: string }> = {
     W: { bg: 'bg-lemon-cyan/20', text: 'text-lemon-cyan' },
@@ -40,60 +39,10 @@ export function DOODsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seriesId, user?.uid]);
 
-    // Build the DOODs matrix
+    // Build the DOODs matrix using shared utility
     const { characters, matrix, totalDays } = useMemo(() => {
-        if (!schedule) return { characters: [], matrix: new Map(), totalDays: 0 };
-
-        const totalDays = schedule.shootDays.length;
-
-        // Collect all characters and which days they appear in
-        const charDays = new Map<string, Set<number>>();
-        for (const day of schedule.shootDays) {
-            for (const strip of day.strips) {
-                for (const char of strip.characters) {
-                    const key = char.toUpperCase().trim();
-                    if (!charDays.has(key)) charDays.set(key, new Set());
-                    charDays.get(key)!.add(day.dayNumber);
-                }
-            }
-        }
-
-        // Sort characters by number of working days (descending)
-        const characters = [...charDays.entries()]
-            .sort((a, b) => b[1].size - a[1].size)
-            .map(([name]) => name);
-
-        // Build status matrix
-        const matrix = new Map<string, DOODStatus[]>();
-        for (const char of characters) {
-            const workingDays = charDays.get(char)!;
-            const dayNumbers = [...workingDays].sort((a, b) => a - b);
-            const firstDay = dayNumbers[0]!;
-            const lastDay = dayNumbers[dayNumbers.length - 1]!;
-
-            const statuses: DOODStatus[] = [];
-            for (let d = 1; d <= totalDays; d++) {
-                if (!workingDays.has(d)) {
-                    // If between first and last working day, it's a hold
-                    if (d > firstDay && d < lastDay) {
-                        statuses.push('H');
-                    } else {
-                        statuses.push('');
-                    }
-                } else if (firstDay === lastDay && d === firstDay) {
-                    statuses.push('SWF'); // Single day
-                } else if (d === firstDay) {
-                    statuses.push('SW');
-                } else if (d === lastDay) {
-                    statuses.push('WF');
-                } else {
-                    statuses.push('W');
-                }
-            }
-            matrix.set(char, statuses);
-        }
-
-        return { characters, matrix, totalDays };
+        if (!schedule) return { characters: [], matrix: new Map<string, DOODStatus[]>(), totalDays: 0 };
+        return buildDoodMatrix(schedule);
     }, [schedule]);
 
     const seriesRegularNames = useMemo(

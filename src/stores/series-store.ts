@@ -7,6 +7,8 @@ import {
     createEpisodes as fsCreateEpisodes,
     getEpisodes,
     updateEpisode as fsUpdateEpisode,
+    addRosterEntry as fsAddRosterEntry,
+    updateRosterEntry as fsUpdateRosterEntry,
 } from '@/lib/firestore/series';
 
 interface SeriesState {
@@ -30,6 +32,8 @@ interface SeriesState {
     rosterEntries: RosterEntry[];
     isLoadingRoster: boolean;
     loadRoster: (uid: string, seriesId: string) => Promise<void>;
+    addRosterEntry: (uid: string, seriesId: string, entry: RosterEntry) => void;
+    updateRosterEntry: (uid: string, seriesId: string, entryId: string, data: Partial<RosterEntry>) => void;
 }
 
 export const useSeriesStore = create<SeriesState>((set, get) => ({
@@ -135,6 +139,20 @@ export const useSeriesStore = create<SeriesState>((set, get) => ({
         } catch {
             set({ isLoadingRoster: false });
         }
+    },
+
+    addRosterEntry: (uid, seriesId, entry) => {
+        set((state) => ({ rosterEntries: [...state.rosterEntries, entry] }));
+        fsAddRosterEntry(uid, seriesId, entry).catch(console.error);
+    },
+
+    updateRosterEntry: (uid, seriesId, entryId, data) => {
+        set((state) => ({
+            rosterEntries: state.rosterEntries.map((e) =>
+                e.id === entryId ? { ...e, ...data } : e
+            ),
+        }));
+        fsUpdateRosterEntry(uid, seriesId, entryId, data).catch(console.error);
     },
 }));
 

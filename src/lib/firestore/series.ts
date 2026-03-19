@@ -217,3 +217,28 @@ export async function upsertRosterEntry(
         { ...entry, _updatedAt: serverTimestamp() }
     );
 }
+
+/** Create a brand-new roster entry (uses setDoc with a fresh UUID). */
+export async function addRosterEntry(
+    uid: string,
+    seriesId: string,
+    entry: RosterEntry
+): Promise<void> {
+    await setDoc(
+        doc(db, 'users', uid, 'series', seriesId, 'roster', entry.id),
+        { ...entry, _updatedAt: serverTimestamp() }
+    );
+}
+
+/** Partially update an existing roster entry. */
+export async function updateRosterEntry(
+    uid: string,
+    seriesId: string,
+    entryId: string,
+    updates: Partial<RosterEntry>
+): Promise<void> {
+    await updateDoc(
+        doc(db, 'users', uid, 'series', seriesId, 'roster', entryId),
+        { ...updates, _updatedAt: serverTimestamp() }
+    );
+}
