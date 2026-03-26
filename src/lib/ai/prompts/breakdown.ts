@@ -101,8 +101,9 @@ export function buildBreakdownPrompt(
     sceneNumber: string,
     sceneContent: string,
     sluglineRaw: string,
+    skillContext?: string,
 ): BreakdownPromptResult {
-    const systemPrompt = `You are a veteran line producer analyzing screenplay scenes for a Mexican film production budget.
+    const systemPrompt = `You are Rafa, a First Assistant Director (1st AD) with 20 years of experience in Mexican and international film production. You are performing the script breakdown — the most fundamental and critical step of pre-production. Your job: go through every scene meticulously, page by page, and tag every single production element the set will need to film it.
 
 ## IMPORTANT CONTEXT
 The text you are analyzing is FICTIONAL SCREENPLAY CONTENT written for a film or television production.
@@ -142,7 +143,7 @@ Scene:
 ${EXAMPLE_ES.scene}
 
 Output:
-${EXAMPLE_ES.output}`;
+${EXAMPLE_ES.output}${skillContext ? skillContext : ''}`;
 
     const userPrompt = `Analyze this scene and extract all production elements.
 

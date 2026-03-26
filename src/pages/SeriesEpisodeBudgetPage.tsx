@@ -9,6 +9,8 @@ import { useSeriesStore } from '@/stores/series-store';
 import { generateAutoBudget } from '@/lib/budget/auto-budget';
 import { formatMXN } from '@/lib/budget/calculator';
 import type { BudgetLineItem } from '@/types/budget';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
 
 // Pre-populated amortized placeholder rows — LP fills in values, MXN 0 is forcing function
 const AMORTIZED_PLACEHOLDERS: Omit<BudgetLineItem, 'id'>[] = [
@@ -42,6 +44,14 @@ export function SeriesEpisodeBudgetPage() {
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(projectDrafts[0]?.id ?? null);
   const selectedDraft = projectDrafts.find(d => d.id === selectedDraftId) ?? projectDrafts[0];
   const [generating, setGenerating] = useState(false);
+  const [lpOpen, setLpOpen] = useState(true);
+  const lpSnapshot: ProjectSnapshot = {
+    projectId: projectId ?? '',
+    scenes: [],
+    breakdowns,
+    activeSceneNumber: null,
+    budget: selectedDraft ?? null,
+  };
 
   const handleGenerate = useCallback(async () => {
     if (!projectId) return;
@@ -120,7 +130,8 @@ export function SeriesEpisodeBudgetPage() {
   if (!projectId) return null;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="flex h-full">
+      <div className="flex-1 min-w-0 overflow-y-auto p-8">
       <h1 className="mb-2">Episode Budget</h1>
       <p className="text-lemon-text-muted font-body text-sm mb-6">
         TV episode budget — line items are tagged as Episode Cost or Amortized.
@@ -230,6 +241,14 @@ export function SeriesEpisodeBudgetPage() {
           <p className="text-lemon-text-muted text-sm font-body mb-4">No budget generated yet. Run the breakdown first, then generate the budget.</p>
         </div>
       )}
+      </div>
+      {/* ── Sandra (Line Producer) panel ── */}
+      <LineProducerPanel
+        context={null}
+        snapshot={lpSnapshot}
+        isOpen={lpOpen}
+        onToggle={() => setLpOpen((o) => !o)}
+      />
     </div>
   );
 }

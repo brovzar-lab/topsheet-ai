@@ -1,13 +1,15 @@
 /**
  * LineProducerPanel.tsx — AI Line Producer docked sidebar.
  *
- * Margo: 20-year veteran AI Line Producer.
+ * Sandra: 20-year veteran AI Line Producer.
  * Outputs structured action blocks that execute real-time breakdown store mutations.
  *
  * Response format:
  *   [prose...]
  *   [ACTIONS]{"actions":[...]}[/ACTIONS]
+ *   [CROSS_CONSULT]{"target":"rafa","question":"..."}[/CROSS_CONSULT]
  *
+ * Chat history lives in useChatStore (Zustand) — survives page navigation.
  * Width: 288px. Collapsed = 40px strip.
  */
 
@@ -15,9 +17,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Bot, Send, Trash2, Copy, CheckCheck, ChevronRight, ChevronLeft,
     AlertTriangle, FileText, Layers, DollarSign, Zap, Check, RotateCcw,
+    ArrowRightLeft,
 } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useChatStore } from '@/stores/chat-store';
+import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { getSandraTerritoryContext } from '@/lib/territory-knowledge';
+import type { ProductionTerritory } from '@/lib/territory-knowledge';
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 import type { Scene, SceneBreakdown, BudgetDraft, ElementCategoryId } from '@/types';
 
@@ -28,10 +35,12 @@ import type { Scene, SceneBreakdown, BudgetDraft, ElementCategoryId } from '@/ty
 interface Message {
     role: 'user' | 'assistant';
     content: string;
-    actions?: MargoAction[];
+    actions?: SandraAction[];
+    /** Set on cross-agent relay messages produced by consulting Rafa */
+    crossAgent?: { from: 'rafa'; question: string; loading?: boolean };
 }
 
-export interface MargoAction {
+export interface SandraAction {
     type: 'ADD_ELEMENT' | 'ADD_ELEMENTS_BULK' | 'REMOVE_ELEMENT' | 'MARK_REVIEWED' | 'MARK_ALL_REVIEWED';
     label: string;
     payload: Record<string, unknown>;
@@ -53,10 +62,11 @@ export interface ProjectSnapshot {
     breakdowns: Record<string, SceneBreakdown>;
     activeSceneNumber: string | null;
     budget?: BudgetDraft | null;
+    territory?: ProductionTerritory | null;
 }
 
 // -----------------------------------------------------------------------
-// Valid element category IDs (Margo must use these exactly)
+// Valid element category IDs (Sandra must use these exactly)
 // -----------------------------------------------------------------------
 
 const VALID_CATEGORY_IDS: ElementCategoryId[] = [
@@ -66,36 +76,65 @@ const VALID_CATEGORY_IDS: ElementCategoryId[] = [
 ];
 
 // -----------------------------------------------------------------------
-// Parse Margo response → prose + actions
+// Parse Sandra response → prose + actions
 // -----------------------------------------------------------------------
 
-function parseMargoResponse(raw: string): { prose: string; actions: MargoAction[] } {
-    const start = raw.indexOf('[ACTIONS]');
-    const end = raw.indexOf('[/ACTIONS]');
+interface ParsedSandraResponse {
+    prose: string;
+    actions: SandraAction[];
+    crossConsult: { target: 'rafa'; question: string } | null;
+}
 
-    if (start === -1 || end === -1 || end <= start) {
-        return { prose: raw.trim(), actions: [] };
+function parseSandraResponse(raw: string): ParsedSandraResponse {
+    let working = raw;
+    let crossConsult: ParsedSandraResponse['crossConsult'] = null;
+
+    // ── Extract [CROSS_CONSULT] block first ──────────────────────────────
+    const ccStart = working.indexOf('[CROSS_CONSULT]');
+    if (ccStart !== -1) {
+        const ccEnd = working.indexOf('[/CROSS_CONSULT]');
+        const ccJson = ccEnd !== -1
+            ? working.slice(ccStart + '[CROSS_CONSULT]'.length, ccEnd)
+            : working.slice(ccStart + '[CROSS_CONSULT]'.length);
+        try {
+            const p = JSON.parse(ccJson.trim()) as { target?: string; question?: string };
+            if (p.target === 'rafa' && p.question) {
+                crossConsult = { target: 'rafa', question: p.question };
+            }
+        } catch { /* malformed — ignore */ }
+        // Strip the block from working text before further parsing
+        working = (working.slice(0, ccStart) +
+            (ccEnd !== -1 ? working.slice(ccEnd + '[/CROSS_CONSULT]'.length) : '')
+        ).trim();
     }
 
-    const prose = raw.slice(0, start).trim();
-    const jsonStr = raw.slice(start + '[ACTIONS]'.length, end).trim();
+    // ── Extract [ACTIONS] block ──────────────────────────────────────────
+    const start = working.indexOf('[ACTIONS]');
+    if (start === -1) return { prose: working.trim(), actions: [], crossConsult };
+
+    const prose = working.slice(0, start).trim();
+
+    // Be tolerant: if [/ACTIONS] is missing, consume to end-of-string
+    const closingTag = working.indexOf('[/ACTIONS]');
+    const jsonStr = closingTag !== -1
+        ? working.slice(start + '[ACTIONS]'.length, closingTag).trim()
+        : working.slice(start + '[ACTIONS]'.length).trim();
 
     try {
         const parsed = JSON.parse(jsonStr);
-        const actions: MargoAction[] = Array.isArray(parsed.actions) ? parsed.actions : [];
-        return { prose, actions };
+        const actions: SandraAction[] = Array.isArray(parsed.actions) ? parsed.actions : [];
+        return { prose, actions, crossConsult };
     } catch {
-        // Malformed JSON — show prose only, no crash
-        return { prose, actions: [] };
+        return { prose, actions: [], crossConsult };
     }
 }
 
 // -----------------------------------------------------------------------
-// Execute a MargoAction → store mutation
+// Execute a SandraAction → store mutation
 // -----------------------------------------------------------------------
 
 // Returns an undo closure that reverses the action, or null if not reversible.
-function executeAction(action: MargoAction): (() => void) | null {
+function executeAction(action: SandraAction): (() => void) | null {
     const store = useBreakdownStore.getState();
 
     switch (action.type) {
@@ -104,7 +143,7 @@ function executeAction(action: MargoAction): (() => void) | null {
                 sceneNumber: string;
                 element: { categoryId: ElementCategoryId; name: string; quantity?: number; notes?: string };
             };
-            const id = `margo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const id = `sandra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
             store.addElement(sceneNumber, {
                 id,
                 categoryId: element.categoryId,
@@ -123,7 +162,7 @@ function executeAction(action: MargoAction): (() => void) | null {
             };
             const ids: string[] = [];
             for (const el of elements) {
-                const id = `margo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                const id = `sandra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
                 ids.push(id);
                 store.addElement(sceneNumber, {
                     id,
@@ -186,11 +225,13 @@ function buildSystemPrompt(
     snapshot?: ProjectSnapshot | null,
     ctx?: LineProducerContext | null,
     chatMode: 'scene' | 'project' = 'scene',
+    sandraSkillContext?: string,
+    territory?: ProductionTerritory | null,
 ): string {
     const lines: string[] = [];
 
     lines.push(
-        `You are Margo, a veteran AI Line Producer with 20 years in Mexican and international film production.`,
+        `You are Sandra, a veteran AI Line Producer with 20 years in Mexican and international film production.`,
         `You are embedded in Lemon Budget Engine — a screenplay breakdown and film budgeting tool.`,
         `You can see the full script, all breakdown elements, and the project budget.`,
         ``,
@@ -262,7 +303,7 @@ function buildSystemPrompt(
 
         // FULL ELEMENT MANIFEST — all scenes, all element names + IDs, both modes.
         // Gemini 2.5 Pro has a 1M token context window; a 120-scene feature is ~3% of that.
-        // No shortcuts — Margo needs to see every element to catch duplicates, scheduling
+        // No shortcuts — Sandra needs to see every element to catch duplicates, scheduling
         // conflicts, under-staffed scenes, and continuity issues across the whole script.
         if (bdCount > 0) {
             lines.push(`\nCOMPLETE ELEMENT MANIFEST (all ${snapshot.scenes.length} scenes — full names and IDs):`);
@@ -278,7 +319,7 @@ function buildSystemPrompt(
 
         // SCENE BODY TEXT:
         // Scene mode — full text of the active scene for accuracy analysis.
-        // Project mode — 400-char excerpt of every scene so Margo can reason about what
+        // Project mode — 400-char excerpt of every scene so Sandra can reason about what
         //               actually happens in each one without loading 120 full scripts.
         if (chatMode === 'scene' && activeSceneNum) {
             const activeScene = snapshot.scenes.find(s => s.sceneNumber === activeSceneNum);
@@ -327,6 +368,14 @@ function buildSystemPrompt(
         lines.push(`Diagnose and suggest fixes. If you can apply them directly, include an [ACTIONS] block.`);
     }
 
+    // ── Territory knowledge ──
+    const territoryCtx = getSandraTerritoryContext(territory ?? snapshot?.territory);
+    if (territoryCtx) lines.push(territoryCtx);
+
+    if (sandraSkillContext) {
+        lines.push('');
+        lines.push(sandraSkillContext);
+    }
     return lines.join('\n');
 }
 
@@ -353,51 +402,38 @@ function getQuickPrompts(snapshot?: ProjectSnapshot | null): string[] {
     return prompts.slice(0, 4);
 }
 
-// -----------------------------------------------------------------------
-// Action button component
-// -----------------------------------------------------------------------
 
-function ActionButton({ action }: { action: MargoAction }) {
-    const [state, setState] = useState<'idle' | 'applied'>('idle');
-    const undoFnRef = useRef<(() => void) | null>(null);
-
-    const handleApply = () => {
-        if (state === 'applied') return;
-        const undo = executeAction(action);
-        undoFnRef.current = undo;
-        setState('applied');
-    };
-
-    const handleUndo = () => {
-        undoFnRef.current?.();
-        undoFnRef.current = null;
-        setState('idle');
-    };
-
-    const isApplied = state === 'applied';
-    const canUndo = isApplied && undoFnRef.current !== null;
-
+// Controlled variant used inside ActionGroup so Apply All can drive state
+function ActionButton({
+    action,
+    applied,
+    onApply,
+    onUndo,
+}: {
+    action: SandraAction;
+    applied: boolean;
+    onApply: () => void;
+    onUndo: () => void;
+}) {
     return (
         <div className="flex items-center gap-1.5">
-            {/* Apply / Applied button */}
             <button
-                onClick={handleApply}
+                onClick={applied ? undefined : onApply}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[0.65rem] font-medium border transition-all ${
-                    isApplied
+                    applied
                         ? 'bg-green-500/15 border-green-500/30 text-green-400 cursor-default'
                         : 'bg-lemon-yellow/10 border-lemon-yellow/30 text-lemon-yellow hover:bg-lemon-yellow/20 hover:border-lemon-yellow/50 cursor-pointer'
                 }`}
             >
-                {isApplied
+                {applied
                     ? <><Check size={11} /> Applied</>
                     : <><Zap size={11} /> {action.label}</>
                 }
             </button>
 
-            {/* Undo button — only visible after applying */}
-            {canUndo && (
+            {applied && (
                 <button
-                    onClick={handleUndo}
+                    onClick={onUndo}
                     title="Undo this action"
                     className="flex items-center gap-1 px-2 py-1.5 rounded text-[0.6rem] font-medium border border-lemon-gray-600 text-lemon-text-muted hover:border-lemon-coral/50 hover:text-lemon-coral hover:bg-lemon-coral/8 transition-all"
                 >
@@ -408,37 +444,110 @@ function ActionButton({ action }: { action: MargoAction }) {
     );
 }
 
+// Group: renders Apply All (when >1 action) + individual action buttons
+function ActionGroup({ actions }: { actions: SandraAction[] }) {
+    // Track applied state + undo closures for each action by index
+    const [appliedMap, setAppliedMap] = useState<Record<number, boolean>>({});
+    const undoRefs = useRef<Record<number, (() => void) | null>>({});
+
+    const applyOne = (idx: number) => {
+        if (appliedMap[idx]) return;
+        const action = actions[idx];
+        if (!action) return;
+        const undo = executeAction(action);
+        undoRefs.current[idx] = undo ?? null;
+        setAppliedMap(prev => ({ ...prev, [idx]: true }));
+    };
+
+    const undoOne = (idx: number) => {
+        undoRefs.current[idx]?.();
+        undoRefs.current[idx] = null;
+        setAppliedMap(prev => ({ ...prev, [idx]: false }));
+    };
+
+    const pendingCount = actions.filter((_, i) => !appliedMap[i]).length;
+    const allApplied = pendingCount === 0;
+
+    const applyAll = () => {
+        actions.forEach((_, idx) => {
+            if (!appliedMap[idx]) applyOne(idx);
+        });
+    };
+
+    return (
+        <div className="flex flex-col gap-1.5">
+            <p className="text-[0.55rem] text-lemon-text-muted uppercase tracking-widest font-mono pl-0.5">
+                Actions — click to apply
+            </p>
+
+            {/* Apply All — only shown when there are 2+ actions */}
+            {actions.length > 1 && (
+                <button
+                    onClick={allApplied ? undefined : applyAll}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[0.65rem] font-semibold border transition-all ${
+                        allApplied
+                            ? 'bg-green-500/15 border-green-500/30 text-green-400 cursor-default'
+                            : 'bg-lemon-cyan/12 border-lemon-cyan/40 text-lemon-cyan hover:bg-lemon-cyan/20 hover:border-lemon-cyan/60 cursor-pointer'
+                    }`}
+                >
+                    {allApplied
+                        ? <><Check size={11} /> All Applied</>
+                        : <><Zap size={11} /> Apply All ({pendingCount})</>
+                    }
+                </button>
+            )}
+
+            {/* Individual action buttons */}
+            {actions.map((action, idx) => (
+                <ActionButton
+                    key={idx}
+                    action={action}
+                    applied={!!appliedMap[idx]}
+                    onApply={() => applyOne(idx)}
+                    onUndo={() => undoOne(idx)}
+                />
+            ))}
+        </div>
+    );
+}
+
 // -----------------------------------------------------------------------
 // Main component
 // -----------------------------------------------------------------------
 
-export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
+export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 'right', isPrimary = true }: {
     context?: LineProducerContext | null;
     snapshot?: ProjectSnapshot | null;
     isOpen: boolean;
     onToggle: () => void;
+    /** Which side of the layout this panel sits on. Affects border and chevron. Default: 'right' */
+    side?: 'left' | 'right';
+    /** When false (secondary agent), hides suggestion cards — only greeting + input shown. Default: true */
+    isPrimary?: boolean;
 }) {
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
 
-    // ── Per-scene + per-mode keyed chat history ──
-    // Key: "scene:3" | "__project__"
-    // Switching scenes auto-switches the active thread; old threads are preserved.
-    const [chatHistory, setChatHistory] = useState<Record<string, Message[]>>({});
+    // ── Persistent thread from Zustand store (survives page navigation) ──
+    const rawMessages         = useChatStore((s) => s.sandraMessages);
+    const setRawMessages      = useChatStore((s) => s.setSandraMessages);
+    const setSandraSystemPrompt = useChatStore((s) => s.setSandraSystemPrompt);
+    // Rafa's cached context so Sandra can invoke him even when he's not mounted
+    const rafaSystemPrompt    = useChatStore((s) => s.rafaSystemPrompt);
+    const rafaMessages        = useChatStore((s) => s.rafaMessages);
+
+    // Cast to panel-local Message type (store uses unknown[] for actions)
+    const messages = rawMessages as Message[];
+    const setMessages = setRawMessages as (u: Message[] | ((p: Message[]) => Message[])) => void;
+
     const [chatMode, setChatMode] = useState<'scene' | 'project'>('scene');
-
     const activeScene = snapshot?.activeSceneNumber ?? null;
-    const chatKey = chatMode === 'project' ? '__project__' : `scene:${activeScene ?? 'none'}`;
-    const messages = chatHistory[chatKey] ?? [];
 
-    const setMessages = useCallback(
+    const setMessagesStable = useCallback(
         (updater: Message[] | ((prev: Message[]) => Message[])) => {
-            setChatHistory(prev => {
-                const current = prev[chatKey] ?? [];
-                const next = typeof updater === 'function' ? updater(current) : updater;
-                return { ...prev, [chatKey]: next };
-            });
+            setMessages(updater);
         },
-        [chatKey],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [],
     );
 
     const [input, setInput] = useState('');
@@ -446,13 +555,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
     const [copied, setCopied] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Clear input when mode or scene changes
-    const prevChatKeyRef = useRef<string>(chatKey);
-    if (prevChatKeyRef.current !== chatKey) {
-        prevChatKeyRef.current = chatKey;
-        // Use a microtask so React batches correctly
-        Promise.resolve().then(() => setInput(''));
-    }
+    // (No longer clearing input or chat on tab/scene changes)
 
     const prevContextRef = useRef<string | null>(null);
     const ctxKey = context ? `${context.sceneNumber}-${context.errorType}` : null;
@@ -465,13 +568,54 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }, [messages, isLoading]);
 
-    const systemPrompt = buildSystemPrompt(snapshot, context, chatMode);
+    // chatMode feeds Sandra's context (scene vs all scenes) without touching the thread
+    const sandraSkillContext = useAgentBrainStore.getState().getSandraSkillContext();
+    const systemPrompt = buildSystemPrompt(snapshot, context, chatMode, sandraSkillContext || undefined, snapshot?.territory);
+
+    // Sync system prompt to store so Rafa can invoke Sandra even when this panel is unmounted
+    useEffect(() => {
+        if (systemPrompt) setSandraSystemPrompt(systemPrompt);
+    }, [systemPrompt, setSandraSystemPrompt]);
+
+    // ── Cross-consult: Sandra asks Rafa a question ──────────────────────────
+    const executeCrossConsult = useCallback(async (
+        question: string,
+        targetSystemPrompt: string,
+        targetHistory: Message[],
+        apiKeyVal: string,
+    ): Promise<string> => {
+        const genAI = new GoogleGenerativeAI(apiKeyVal);
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.5-flash',
+            generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+            safetySettings: [
+                { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            ],
+            systemInstruction: targetSystemPrompt,
+        });
+        const history = targetHistory
+            .filter(m => m.content && !m.crossAgent)
+            .map(m => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }],
+            }));
+        const chat = model.startChat({ history });
+        const result = await chat.sendMessage(question);
+        // Strip any block markers from Rafa's reply
+        return result.response.text()
+            .replace(/\[ACTIONS\][\s\S]*?(\[\/ACTIONS\]|$)/g, '')
+            .replace(/\[CROSS_CONSULT\][\s\S]*?(\[\/CROSS_CONSULT\]|$)/g, '')
+            .trim();
+    }, []);
 
     const sendMessage = useCallback(async (overrideText?: string) => {
         const text = (overrideText ?? input).trim();
         if (!text || !apiKey || isLoading) return;
 
-        setMessages(prev => [...prev, { role: 'user', content: text }]);
+        setMessagesStable(prev => [...prev, { role: 'user', content: text }]);
         if (!overrideText) setInput('');
         setIsLoading(true);
 
@@ -497,8 +641,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
 
             const chat = model.startChat({ history });
 
-            // Add a live streaming message placeholder
-            setMessages(prev => [...prev, { role: 'assistant', content: '', actions: [] }]);
+            setMessagesStable(prev => [...prev, { role: 'assistant', content: '', actions: [] }]);
             setIsLoading(false); // hide typing dots — streaming text is the live indicator
 
             const stream = await chat.sendMessageStream(text);
@@ -509,41 +652,85 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
                 // Strip any in-progress [ACTIONS] block from the visible text while streaming
                 const visibleEnd = full.indexOf('[ACTIONS]');
                 const liveText = visibleEnd === -1 ? full : full.slice(0, visibleEnd);
-                setMessages(prev => {
+                setMessagesStable(prev => {
                     const updated = [...prev];
                     updated[updated.length - 1] = { role: 'assistant', content: liveText, actions: [] };
                     return updated;
                 });
             }
 
-            // Final parse: extract prose + actions from the complete response
-            const { prose, actions } = parseMargoResponse(full);
-            setMessages(prev => {
+            // Final parse: extract prose + actions + optional cross-consult request
+            const { prose, actions, crossConsult } = parseSandraResponse(full);
+            setMessagesStable(prev => {
                 const updated = [...prev];
                 updated[updated.length - 1] = { role: 'assistant', content: prose, actions };
                 return updated;
             });
+
+            // ── Execute cross-consult if Sandra requested one ──
+            if (crossConsult && rafaSystemPrompt) {
+                // Add a loading relay bubble immediately
+                setMessagesStable(prev => [...prev, {
+                    role: 'assistant',
+                    content: '',
+                    crossAgent: { from: 'rafa', question: crossConsult.question, loading: true },
+                }]);
+                try {
+                    const rafaReply = await executeCrossConsult(
+                        crossConsult.question,
+                        rafaSystemPrompt,
+                        rafaMessages as Message[],
+                        apiKey,
+                    );
+                    setMessagesStable(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last?.crossAgent?.loading) {
+                            updated[updated.length - 1] = {
+                                role: 'assistant',
+                                content: rafaReply,
+                                crossAgent: { from: 'rafa', question: crossConsult.question },
+                            };
+                        }
+                        return updated;
+                    });
+                } catch {
+                    setMessagesStable(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last?.crossAgent?.loading) {
+                            updated[updated.length - 1] = {
+                                role: 'assistant',
+                                content: "Rafa didn't respond — try again.",
+                                crossAgent: { from: 'rafa', question: crossConsult.question },
+                            };
+                        }
+                        return updated;
+                    });
+                }
+            }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${msg}`, actions: [] }]);
+            setMessagesStable(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${msg}`, actions: [] }]);
         } finally {
             setIsLoading(false);
         }
-    }, [input, apiKey, isLoading, messages, systemPrompt]);
+    }, [input, apiKey, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult]);
 
     const clearChat = useCallback(() => {
         setMessages([]);
         setInput('');
         prevContextRef.current = null;
-    }, [setMessages]);
+    }, []);
 
     const copyAll = useCallback(() => {
-        const text = messages.map(m => `${m.role === 'user' ? 'You' : 'Margo'}: ${m.content}`).join('\n\n');
+        const text = messages.map(m => `${m.role === 'user' ? 'You' : 'Sandra'}: ${m.content}`).join('\n\n');
         navigator.clipboard.writeText(text).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });
     }, [messages]);
+
 
     const sceneCount = snapshot?.scenes.length ?? 0;
     const bdCount = snapshot ? Object.keys(snapshot.breakdowns).length : 0;
@@ -556,20 +743,20 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
 
     if (!isOpen) {
         return (
-            <div className="w-10 flex-shrink-0 border-l border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col items-center pt-4 gap-2">
+            <div className={`w-10 flex-shrink-0 ${side === 'left' ? 'border-r' : 'border-l'} border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col items-center pt-4 gap-2`}>
                 <button
                     onClick={onToggle}
-                    title="Open Margo — AI Line Producer"
+                    title="Open Sandra — AI Line Producer"
                     className="flex flex-col items-center gap-1.5 text-lemon-text-muted hover:text-lemon-cyan transition-colors"
                 >
                     <Bot size={16} />
-                    <ChevronLeft size={10} />
+                    {side === 'left' ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
                 </button>
                 <div
                     className="mt-2 text-[0.5rem] font-display font-bold uppercase tracking-widest text-lemon-text-muted"
                     style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                 >
-                    Margo · LP
+                    Sandra · LP
                 </div>
             </div>
         );
@@ -580,7 +767,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
     // -----------------------------------------------------------------------
 
     return (
-        <div className="w-72 flex-shrink-0 border-l border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col">
+        <div className={`w-72 flex-shrink-0 ${side === 'left' ? 'border-r' : 'border-l'} border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col`}>
 
             {/* ── Header ── */}
             <div className="px-3 pt-2.5 pb-0 border-b border-lemon-gray-700">
@@ -591,15 +778,9 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
                         <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-bold uppercase tracking-wider text-lemon-text-primary">Margo</p>
-                        <p className="text-[0.6rem] text-lemon-text-muted truncate">
-                            {chatMode === 'project'
-                                ? `All ${snapshot?.scenes.length ?? 0} scenes · project view`
-                                : context
-                                ? `Scene ${context.sceneNumber} · ${context.errorType.toUpperCase()} error`
-                                : activeScene
-                                ? `Scene ${activeScene} chat`
-                                : 'AI Line Producer'}
+                        <p className="text-xs font-display font-bold uppercase tracking-wider text-lemon-text-primary">
+                            Sandra
+                            <span className="text-lemon-text-muted font-normal"> — Line Producer</span>
                         </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -669,7 +850,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
             {!apiKey && (
                 <div className="flex-1 flex flex-col items-center justify-center p-4 text-center gap-2">
                     <AlertTriangle size={24} className="text-lemon-yellow" />
-                    <p className="text-xs text-lemon-text-muted">Add a Gemini API key in Settings to use Margo.</p>
+                    <p className="text-xs text-lemon-text-muted">Add a Gemini API key in Settings to use Sandra.</p>
                 </div>
             )}
 
@@ -677,52 +858,59 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
             {apiKey && messages.length === 0 && !context && (
                 <div className="flex-1 flex flex-col items-start justify-start p-3 gap-3 overflow-y-auto">
                     <div className="w-full text-center pt-4 pb-1">
-                        <p className="text-xs font-display font-bold text-lemon-text-primary">Hey, I'm Margo.</p>
+                        <p className="text-xs font-display font-bold text-lemon-text-primary">Hey, I'm Sandra.</p>
                         <p className="text-[0.65rem] text-lemon-text-muted leading-relaxed mt-0.5">
-                            I can see your script{hasBudget ? ', breakdowns, and budget' : ' and breakdowns'}.
-                            Click anything below to get started.
+                            {isPrimary
+                                ? `I can see your script${hasBudget ? ', breakdowns, and budget' : ' and breakdowns'}. Click anything below to get started.`
+                                : `I'm available to help. Ask me anything about the budget or production costs.`
+                            }
                         </p>
                     </div>
 
-                    {/* ── Breakdown Accuracy Analysis card (scene mode only) ── */}
-                    {chatMode === 'scene' && activeScene && (
-                        <button
-                            onClick={() => sendMessage(
-                                `Look at Scene ${activeScene} — the scene text and its breakdown elements. ` +
-                                `Give me your honest take: what's missing, what doesn't belong, and how solid is it overall? ` +
-                                `Keep it conversational. If you see things to fix, include an [ACTIONS] block.`
-                            )}
-                            className="w-full text-left rounded-lg border border-lemon-cyan/30 bg-lemon-cyan/5 hover:bg-lemon-cyan/10 hover:border-lemon-cyan/50 transition-all p-3 group"
-                        >
-                            <div className="flex items-start gap-2">
-                                <div className="w-6 h-6 rounded bg-lemon-cyan/15 border border-lemon-cyan/30 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-lemon-cyan/25 transition-colors">
-                                    <Layers size={12} className="text-lemon-cyan" />
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-[0.7rem] font-bold text-lemon-cyan leading-tight">
-                                        Breakdown Accuracy Analysis
-                                    </p>
-                                    <p className="text-[0.6rem] text-lemon-text-muted leading-snug mt-0.5">
-                                        Audit Scene {activeScene} — spot missing elements, wrong entries, and get one-click fixes.
-                                    </p>
-                                </div>
-                            </div>
-                        </button>
-                    )}
-
-                    {/* ── Regular quick prompts ── */}
-                    {quickPrompts.length > 0 && (
-                        <div className="w-full space-y-1">
-                            {quickPrompts.map(prompt => (
+                    {/* ── Suggestion cards — only shown when Sandra is the primary agent ── */}
+                    {isPrimary && (
+                        <>
+                            {/* ── Breakdown Accuracy Analysis card (scene mode only) ── */}
+                            {chatMode === 'scene' && activeScene && (
                                 <button
-                                    key={prompt}
-                                    onClick={() => sendMessage(prompt)}
-                                    className="w-full text-left px-2.5 py-1.5 text-[0.6rem] text-lemon-text-muted border border-lemon-gray-700 rounded hover:border-lemon-cyan/40 hover:text-lemon-text-body hover:bg-lemon-cyan/5 transition-colors leading-snug"
+                                    onClick={() => sendMessage(
+                                        `Look at Scene ${activeScene} — the scene text and its breakdown elements. ` +
+                                        `Give me your honest take: what's missing, what doesn't belong, and how solid is it overall? ` +
+                                        `Keep it conversational. If you see things to fix, include an [ACTIONS] block.`
+                                    )}
+                                    className="w-full text-left rounded-lg border border-lemon-cyan/30 bg-lemon-cyan/5 hover:bg-lemon-cyan/10 hover:border-lemon-cyan/50 transition-all p-3 group"
                                 >
-                                    {prompt}
+                                    <div className="flex items-start gap-2">
+                                        <div className="w-6 h-6 rounded bg-lemon-cyan/15 border border-lemon-cyan/30 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-lemon-cyan/25 transition-colors">
+                                            <Layers size={12} className="text-lemon-cyan" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[0.7rem] font-bold text-lemon-cyan leading-tight">
+                                                Breakdown Accuracy Analysis
+                                            </p>
+                                            <p className="text-[0.6rem] text-lemon-text-muted leading-snug mt-0.5">
+                                                Audit Scene {activeScene} — spot missing elements, wrong entries, and get one-click fixes.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </button>
-                            ))}
-                        </div>
+                            )}
+
+                            {/* ── Regular quick prompts ── */}
+                            {quickPrompts.length > 0 && (
+                                <div className="w-full space-y-1">
+                                    {quickPrompts.map(prompt => (
+                                        <button
+                                            key={prompt}
+                                            onClick={() => sendMessage(prompt)}
+                                            className="w-full text-left px-2.5 py-1.5 text-[0.6rem] text-lemon-text-muted border border-lemon-gray-700 rounded hover:border-lemon-cyan/40 hover:text-lemon-text-body hover:bg-lemon-cyan/5 transition-colors leading-snug"
+                                        >
+                                            {prompt}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
@@ -733,31 +921,48 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
                     {messages.map((msg, i) => (
                         <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                            {/* Margo avatar */}
+                            {/* Sandra avatar */}
                             {msg.role === 'assistant' && (
                                 <div className="w-5 h-5 rounded-full bg-lemon-cyan/15 border border-lemon-cyan/30 flex items-center justify-center flex-shrink-0 mt-0.5">
                                     <Bot size={10} className="text-lemon-cyan" />
                                 </div>
                             )}
                             <div className="flex flex-col gap-2 max-w-[88%]">
-                                {/* Prose bubble */}
-                                <div className={`rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                                    msg.role === 'user'
-                                        ? 'bg-lemon-cyan/12 text-lemon-text-primary border border-lemon-cyan/20'
-                                        : 'bg-lemon-bg-elevated border border-lemon-gray-700 text-lemon-text-body'
-                                }`}>
-                                    {msg.content}
-                                </div>
-                                {/* Action buttons */}
-                                {msg.actions && msg.actions.length > 0 && (
-                                    <div className="flex flex-col gap-1.5">
-                                        <p className="text-[0.55rem] text-lemon-text-muted uppercase tracking-widest font-mono pl-0.5">
-                                            Actions — click to apply
-                                        </p>
-                                        {msg.actions.map((action, ai) => (
-                                            <ActionButton key={`${i}-${ai}`} action={action} />
-                                        ))}
+                                {/* Relay bubble (cross-agent consultation response) */}
+                                {msg.crossAgent ? (
+                                    <div className="rounded-lg border border-lemon-yellow/25 bg-lemon-yellow/5 overflow-hidden">
+                                        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-lemon-yellow/15 bg-lemon-yellow/8">
+                                            <ArrowRightLeft size={9} className="text-lemon-yellow/70 flex-shrink-0" />
+                                            <span className="text-[0.55rem] font-mono uppercase tracking-widest text-lemon-yellow/80">
+                                                {msg.crossAgent.loading ? 'Consulting Rafa…' : 'Rafa responded'}
+                                            </span>
+                                            <span className="ml-auto text-[0.5rem] text-lemon-text-muted truncate max-w-[100px]" title={msg.crossAgent.question}>
+                                                "{msg.crossAgent.question.slice(0, 45)}{msg.crossAgent.question.length > 45 ? '…' : ''}"
+                                            </span>
+                                        </div>
+                                        <div className="px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap text-lemon-text-body">
+                                            {msg.crossAgent.loading ? (
+                                                <span className="flex gap-1 items-center h-4">
+                                                    <span className="w-1 h-1 bg-lemon-yellow/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                    <span className="w-1 h-1 bg-lemon-yellow/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                    <span className="w-1 h-1 bg-lemon-yellow/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                </span>
+                                            ) : msg.content}
+                                        </div>
                                     </div>
+                                ) : (
+                                    /* Normal prose bubble */
+                                    <div className={`rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                                        msg.role === 'user'
+                                            ? 'bg-lemon-cyan/12 text-lemon-text-primary border border-lemon-cyan/20'
+                                            : 'bg-lemon-bg-elevated border border-lemon-gray-700 text-lemon-text-body'
+                                    }`}>
+                                        {msg.content}
+                                    </div>
+                                )}
+                                {/* Action buttons (only on normal Sandra messages) */}
+                                {!msg.crossAgent && msg.actions && msg.actions.length > 0 && (
+                                    <ActionGroup actions={msg.actions} />
                                 )}
                             </div>
                         </div>
@@ -791,7 +996,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle }: {
                                 sendMessage();
                             }
                         }}
-                        placeholder="Ask Margo… (Enter to send)"
+                        placeholder="Ask Sandra… (Enter to send)"
                         rows={2}
                         className="flex-1 px-2.5 py-2 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary placeholder:text-lemon-text-muted focus:border-lemon-cyan focus:outline-none resize-none"
                     />

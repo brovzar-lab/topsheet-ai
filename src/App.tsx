@@ -4,6 +4,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { AuthGate } from './components/AuthGate';
 
+import { HomeScreen } from './pages/HomeScreen';
 import { ProjectNewPage } from './pages/ProjectNewPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { BreakdownPage } from './pages/BreakdownPage';
@@ -64,7 +65,7 @@ export default function App() {
                 <Sidebar />
                 <main className="flex-1 overflow-y-auto">
                     <Routes>
-                        <Route path="/" element={<ProjectNewPage />} />
+                        <Route path="/" element={<HomeScreen />} />
                         <Route path="/project/new" element={<ProjectNewPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/series/new" element={<SeriesNewPage />} />

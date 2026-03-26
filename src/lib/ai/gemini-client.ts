@@ -13,6 +13,22 @@ import type { BreakdownElement } from '@/types';
 import { buildBreakdownPrompt, validateElement } from './prompts/breakdown';
 
 // -----------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------
+
+const SCRIPT_SAMPLE_CHARS = 12_000;  // ~10 pages, enough for title/genre/premise
+const ANALYSIS_TIMEOUT_MS = 30_000;
+const RETRY_DELAY_MS = 2_000;
+
+/** Shared safety settings — BLOCK_NONE because screenplays contain violence, etc. */
+const SAFETY_SETTINGS = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+] as const;
+
+// -----------------------------------------------------------------------
 // Cached Gemini client — reuse across calls to avoid creating new HTTP pools
 // -----------------------------------------------------------------------
 
@@ -58,17 +74,18 @@ export async function analyzeScript(
     const genAI = getClient(apiKey);
     const model = genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
+        generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.3,
+            // Disable thinking — this is a fast extraction task, not a reasoning task.
+            // Without this, gemini-2.5-flash thinks for 30-90s before responding.
+            // @ts-expect-error thinkingConfig is supported but not yet in the type definitions
+            thinkingConfig: { thinkingBudget: 0 },
+        },
+        safetySettings: [...SAFETY_SETTINGS],
     });
 
-    // Use first 12 000 chars — enough context to detect title, genre, and premise
-    const sample = scriptText.slice(0, 12000);
+    const sample = scriptText.slice(0, SCRIPT_SAMPLE_CHARS);
 
     const prompt = `You are a professional script reader. Analyze this screenplay excerpt and return ONLY valid JSON.
 
@@ -97,7 +114,10 @@ Rules:
 - topLocations: up to 4 most prominent location names from sluglines
 - tone: 2-4 lowercase mood/atmosphere words (e.g. "tense", "comedic", "melancholic")`;
 
-    const result = await model.generateContent(prompt);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('analyzeScript timeout')), ANALYSIS_TIMEOUT_MS)
+    );
+    const result = await Promise.race([model.generateContent(prompt), timeoutPromise]);
     const text = result.response.text().trim()
         .replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
 
@@ -142,12 +162,7 @@ export function createBreakdownModel(apiKey: string): GenerativeModel {
             temperature: 0.2,      // low creativity — we want factual extraction
             maxOutputTokens: 4096,
         },
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
+        safetySettings: [...SAFETY_SETTINGS],
     });
 }
 
@@ -170,8 +185,9 @@ export async function generateSceneBreakdown(
     sceneNumber: string,
     sceneContent: string,
     sluglineRaw: string,
+    skillContext?: string,
 ): Promise<BreakdownElement[]> {
-    const { systemPrompt, userPrompt } = buildBreakdownPrompt(sceneNumber, sceneContent, sluglineRaw);
+    const { systemPrompt, userPrompt } = buildBreakdownPrompt(sceneNumber, sceneContent, sluglineRaw, skillContext);
 
     let lastError: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -204,7 +220,7 @@ export async function generateSceneBreakdown(
 
             // Retry on rate-limit or server error
             if (attempt === 0 && (status === 429 || status === 500 || status === 503)) {
-                await sleep(2000);
+                await sleep(RETRY_DELAY_MS);
                 continue;
             }
 

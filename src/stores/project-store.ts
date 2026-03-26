@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Project } from '@/types';
 import {
     saveProject,
@@ -24,7 +25,9 @@ interface ProjectState {
     loadFromFirestore: (uid: string) => Promise<void>;
 }
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
+export const useProjectStore = create<ProjectState>()(
+    persist(
+        (set, get) => ({
     projects: [],
     activeProjectId: null,
     isLoadingProjects: false,
@@ -72,7 +75,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     clearAll: () => set({ projects: [], activeProjectId: null }),
 
     loadScriptText: async (projectId) => {
-        // Check if already loaded in memory
         const existing = get().projects.find((p) => p.id === projectId);
         if (existing?.scriptText) return existing.scriptText;
         // Fetch from separate Firestore doc
@@ -105,4 +107,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             set({ isLoadingProjects: false });
         }
     },
-}));
+        }),
+        {
+            name: 'topsheet-projects',
+            version: 1,
+            partialize: (state) => ({
+                projects: state.projects.map(({ scriptText: _, ...p }) => p),
+                activeProjectId: state.activeProjectId,
+            }),
+        }
+    )
+);

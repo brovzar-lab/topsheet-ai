@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { BudgetDraft, BudgetLineItem } from '@/types';
 import {
     saveDraftHeader,
@@ -18,6 +19,13 @@ interface BudgetState {
     getDraft: (draftId: string) => BudgetDraft | undefined;
     getLatestDraft: (projectId: string) => BudgetDraft | undefined;
     deleteDraftsForProject: (projectId: string) => void;
+    /** Update a single line item field and recalculate totals */
+    updateLineItem: (
+        draftId: string,
+        lineId: string,
+        field: 'rateCentavos' | 'quantity' | 'duration' | 'description',
+        value: number | string,
+    ) => void;
     /** Multiply rate/subtotal of selected lines by a factor */
     bulkScaleLines: (draftId: string, lineIds: string[], factor: number) => void;
     /** Delete selected lines */
@@ -31,7 +39,9 @@ interface BudgetState {
     loadFromFirestore: (uid: string, projectId: string) => Promise<void>;
 }
 
-export const useBudgetStore = create<BudgetState>((set, get) => ({
+export const useBudgetStore = create<BudgetState>()(
+    persist(
+        (set, get) => ({
     drafts: [],
     lastSavedAt: null,
 
@@ -101,6 +111,23 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
             drafts: state.drafts.filter((d) => d.projectId !== projectId),
         })),
 
+    updateLineItem: (draftId, lineId, field, value) => {
+        get().updateDraft(draftId, (draft) => {
+            const updated = draft.lineItems.map((li) => {
+                if (li.id !== lineId) return li;
+                const patched = { ...li, [field]: value, isOverridden: true };
+                // Recalculate subtotal when numeric fields change
+                if (field !== 'description') {
+                    patched.subtotalCentavos = patched.rateCentavos * patched.quantity * patched.duration;
+                }
+                return patched;
+            });
+            const total = updated.reduce((s, li) => s + li.subtotalCentavos, 0);
+            const contingency = Math.round(total * draft.contingencyPercent / 100);
+            return { ...draft, lineItems: updated, totalCentavos: total + contingency, contingencyCentavos: contingency };
+        });
+    },
+
     bulkScaleLines: (draftId, lineIds, factor) => {
         const lineSet = new Set(lineIds);
         get().updateDraft(draftId, (draft) => {
@@ -167,4 +194,13 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
             console.error('[BudgetStore] Failed to load from Firestore:', err);
         }
     },
-}));
+        }),
+        {
+            name: 'topsheet-budgets',
+            version: 1,
+            partialize: (state) => ({
+                drafts: state.drafts,
+            }),
+        }
+    )
+);

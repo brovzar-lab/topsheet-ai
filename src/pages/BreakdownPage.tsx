@@ -22,7 +22,9 @@ import {
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useBudgetStore } from '@/stores/budget-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useScheduleStore } from '@/stores/schedule-store';
 import { ELEMENT_CATEGORIES, getCategoryById } from '@/data/element-categories';
 import { createBreakdownModel } from '@/lib/ai/gemini-client';
 import { processBreakdownBatch } from '@/lib/ai/batch-processor';
@@ -30,6 +32,10 @@ import type { BatchProgress, FailedScene } from '@/lib/ai/batch-processor';
 import type { BreakdownElement, ElementCategoryId } from '@/types';
 import { LineProducerPanel } from '@/components/LineProducerPanel';
 import type { LineProducerContext, ProjectSnapshot } from '@/components/LineProducerPanel';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
+import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
 import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
 
 // -----------------------------------------------------------------------
@@ -69,9 +75,18 @@ export function BreakdownPage() {
     const [newElementName, setNewElementName] = useState('');
     const [newElementCategory, setNewElementCategory] = useState<ElementCategoryId>('props');
 
+    // -- Schedule store (for Rafa on this page) --
+    const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
+
     // -- Line Producer panel --
-    const [lpOpen, setLpOpen] = useState(false);
+    const [lpOpen, setLpOpen] = useState(false);   // secondary — starts collapsed
     const [lpContext, setLpContext] = useState<LineProducerContext | null>(null);
+
+    // -- Assistant Director panel (visible on Breakdown page too) --
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
+
+    // -- Figure It Out brainstorm modal --
+    const [brainstormOpen, setBrainstormOpen] = useState(false);
 
     // ---------------------------------------------------------------
     // Run AI breakdown
@@ -88,11 +103,13 @@ export function BreakdownPage() {
         try {
             const model = createBreakdownModel(apiKey);
             const scenesToProcess = sceneCap > 0 ? scenes.slice(0, sceneCap) : scenes;
+            const rafaSkillContext = useAgentBrainStore.getState().getRafaSkillContext();
             const result = await processBreakdownBatch(
                 model,
                 scenesToProcess,
                 (p) => setProgress(p),
                 controller.signal,
+                rafaSkillContext || undefined,
             );
 
             for (const bd of result.succeeded) {
@@ -158,9 +175,6 @@ export function BreakdownPage() {
         setLpOpen(true);
     }, []);
 
-    // ---------------------------------------------------------------
-    // Add manual element
-    // ---------------------------------------------------------------
 
     const handleAddElement = useCallback(() => {
         if (!selectedScene || !newElementName.trim()) return;
@@ -188,14 +202,31 @@ export function BreakdownPage() {
     );
     const unreviewedCount = Object.values(breakdowns).filter((bd) => !bd.reviewed).length;
 
-    // Snapshot passed to Line Producer — gives Margo full script + breakdown + budget awareness
+    // Snapshot passed to Line Producer — gives Sandra full script + breakdown + budget awareness
     const latestBudget = projectId ? useBudgetStore.getState().getLatestDraft(projectId) : undefined;
+    const currentProject = projectId ? useProjectStore.getState().projects.find(p => p.id === projectId) : undefined;
     const projectSnapshot: ProjectSnapshot = {
         projectId: projectId ?? '',
         scenes,
         breakdowns,
         activeSceneNumber: selectedScene,
         budget: latestBudget ?? null,
+        territory: currentProject?.territory ?? null,
+    };
+
+    // Schedule snapshot for Rafa — always created; schedule is optional but scenes are always injected
+    const adSnapshot: ScheduleSnapshot = {
+        projectId: projectId ?? '',
+        schedule: schedule ?? undefined,
+        breakdowns,
+        activeDayNumber: null,
+        territory: currentProject?.territory ?? null,
+        scenes: scenes.map((sc) => ({
+            sceneNumber: sc.sceneNumber,
+            slugline: sc.slugline,
+            content: sc.content,
+            pageCount: sc.pageCount,
+        })),
     };
 
     // ---------------------------------------------------------------
@@ -238,6 +269,10 @@ export function BreakdownPage() {
     // ---------------------------------------------------------------
 
     return (
+        <>
+        {/* ── Brainstorm modal ── */}
+        {brainstormOpen && <BrainstormPanel onClose={() => setBrainstormOpen(false)} />}
+
         <div className="flex h-full">
             {/* ============ SCENE SIDEBAR ============ */}
             <aside className="w-64 border-r border-lemon-gray-700 bg-lemon-bg-secondary/50 overflow-y-auto flex-shrink-0">
@@ -403,6 +438,11 @@ export function BreakdownPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Figure It Out */}
+                    <div className="ml-auto flex-shrink-0">
+                        <FigureItOutButton onClick={() => setBrainstormOpen(true)} />
+                    </div>
                 </div>
 
                 {/* ── Failures ─────────────────────────────────── */}
@@ -585,14 +625,29 @@ export function BreakdownPage() {
                 )}
             </div>
 
-            {/* ============ LINE PRODUCER PANEL ============ */}
+            {/* ============ ASSISTANT DIRECTOR PANEL — left (owns breakdown) ============ */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={adSnapshot}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId ?? ''}
+                side="left"
+                pageMode="breakdown"
+                isPrimary={true}
+            />
+
+            {/* ============ LINE PRODUCER PANEL — right (support on breakdown) ============ */}
             <LineProducerPanel
                 context={lpContext}
                 snapshot={projectSnapshot}
                 isOpen={lpOpen}
                 onToggle={() => setLpOpen((o) => !o)}
+                side="right"
+                isPrimary={false}
             />
         </div>
+        </>
     );
 }
 

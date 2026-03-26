@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Series, Episode, CreateSeriesInput, RosterEntry } from '@/types/series';
 import {
     createSeries as fsCreateSeries,
@@ -34,9 +35,12 @@ interface SeriesState {
     loadRoster: (uid: string, seriesId: string) => Promise<void>;
     addRosterEntry: (uid: string, seriesId: string, entry: RosterEntry) => void;
     updateRosterEntry: (uid: string, seriesId: string, entryId: string, data: Partial<RosterEntry>) => void;
+    deleteSeries: (uid: string, seriesId: string) => void;
 }
 
-export const useSeriesStore = create<SeriesState>((set, get) => ({
+export const useSeriesStore = create<SeriesState>()(
+    persist(
+        (set, get) => ({
     allSeries: [],
     activeSeries: null,
     episodes: [],
@@ -154,6 +158,28 @@ export const useSeriesStore = create<SeriesState>((set, get) => ({
         }));
         fsUpdateRosterEntry(uid, seriesId, entryId, data).catch(console.error);
     },
-}));
+
+    deleteSeries: (uid, seriesId) => {
+        set((state) => ({
+            allSeries: state.allSeries.filter((s) => s.id !== seriesId),
+            activeSeries: state.activeSeries?.id === seriesId ? null : state.activeSeries,
+        }));
+        // Lazy import to avoid circular dependencies
+        import('@/lib/firestore/series')
+            .then(({ deleteSeries: fsDeleteSeries }) => {
+                if (fsDeleteSeries) fsDeleteSeries(uid, seriesId).catch(console.error);
+            })
+            .catch(console.error);
+    },
+        }),
+        {
+            name: 'topsheet-series',
+            version: 1,
+            partialize: (state) => ({
+                allSeries: state.allSeries,
+            }),
+        }
+    )
+);
 
 

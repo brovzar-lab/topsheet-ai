@@ -5,15 +5,19 @@
  * Rows = characters, Columns = shoot days, Cells = W (work), H (hold), SW (start/work), WF (work/finish).
  */
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
-import { Users, ArrowLeft } from 'lucide-react';
+import { Users, ArrowLeft, Bot } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSeriesStore } from '@/stores/series-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
 import { buildDoodMatrix } from '@/lib/schedule/dood-matrix';
 import type { DOODStatus } from '@/lib/schedule/dood-matrix';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 
 const STATUS_COLORS: Record<DOODStatus, { bg: string; text: string }> = {
     W: { bg: 'bg-lemon-cyan/20', text: 'text-lemon-cyan' },
@@ -55,6 +59,16 @@ export function DOODsPage() {
         [rosterEntries]
     );
 
+    const breakdowns = useBreakdownStore((s) => s.breakdowns);
+    const [lpOpen, setLpOpen] = useState(true);
+    const [adPanelOpen, setAdPanelOpen] = useState(false);
+    const lpSnapshot: ProjectSnapshot = {
+        projectId: projectId ?? '',
+        scenes: [],
+        breakdowns,
+        activeSceneNumber: null,
+    };
+
     if (!projectId) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -82,7 +96,8 @@ export function DOODsPage() {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full">
+            <div className="flex flex-col flex-1 min-w-0">
             <EpisodeBreadcrumb />
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
@@ -104,6 +119,19 @@ export function DOODsPage() {
                     <div className="text-lemon-text-muted">
                         <span className="text-lemon-text-primary font-bold">{totalDays}</span> shoot days
                     </div>
+                    {/* 1ST AD toggle — Rafa is secondary on DOODs */}
+                    <button
+                        onClick={() => setAdPanelOpen((o) => !o)}
+                        title="Open Rafa — AI 1st AD"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-display font-bold uppercase tracking-wider transition-colors ${
+                            adPanelOpen
+                                ? 'bg-lemon-yellow/15 border-lemon-yellow/40 text-lemon-yellow'
+                                : 'bg-lemon-bg-secondary border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-yellow hover:border-lemon-yellow'
+                        }`}
+                    >
+                        <Bot size={12} />
+                        1st AD
+                    </button>
                 </div>
             </header>
 
@@ -209,6 +237,26 @@ export function DOODsPage() {
                     </div>
                 )}
             </div>
+        </div>
+            {/* ── Sandra (Line Producer) panel — PRIMARY ── */}
+            <LineProducerPanel
+                context={null}
+                snapshot={lpSnapshot}
+                isOpen={lpOpen}
+                onToggle={() => setLpOpen((o) => !o)}
+                side="left"
+                isPrimary={true}
+            />
+            {/* ── Rafa (1st AD) — secondary, no prompts ── */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={null}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId ?? ''}
+                side="right"
+                isPrimary={false}
+            />
         </div>
     );
 }

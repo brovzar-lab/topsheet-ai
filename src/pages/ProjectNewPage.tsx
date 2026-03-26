@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Upload, AlertTriangle, CheckCircle, Loader2,
+    Upload, AlertTriangle, Loader2,
     ShieldCheck, ShieldAlert, ArrowRight, MapPin,
     Sparkles, Film, RefreshCw,
 } from 'lucide-react';
@@ -12,14 +12,15 @@ import type { ScriptAnalysis } from '@/lib/ai/gemini-client';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import type { ProductionTier, PrimaryLocation } from '@/types';
+import type { ProductionTier } from '@/types';
+import type { ProductionTerritory } from '@/lib/territory-knowledge';
+import { TERRITORY_LABELS } from '@/lib/territory-knowledge';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type Step =
-    | 'format'
     | 'idle'
     | 'reading'
     | 'parsing'
@@ -53,9 +54,9 @@ export function ProjectNewPage() {
     // Optional project metadata (can be overridden from AI result)
     const [title, setTitle] = useState('');
     const [tier, setTier] = useState<ProductionTier>('mid');
-    const [location, setLocation] = useState<PrimaryLocation>('cdmx');
+    const [territory, setTerritory] = useState<ProductionTerritory>('mexico');
 
-    const [step, setStep] = useState<Step>('format');
+    const [step, setStep] = useState<Step>('idle');
     const [progress, setProgress] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -165,7 +166,8 @@ export function ProjectNewPage() {
             id: projectId,
             title: finalTitle,
             tier,
-            location,
+            location: 'cdmx', // legacy field kept for compat
+            territory,
             scriptText: parsed.scriptText,
             totalPages: parsed.totalPages,
             sceneCount: parsed.sceneCount,
@@ -177,7 +179,7 @@ export function ProjectNewPage() {
         setScenes(projectId, parsed.scenes);
 
         navigate(`/project/${projectId}/breakdown`);
-    }, [parsed, title, tier, location, addProject, setScenes, navigate]);
+    }, [parsed, title, tier, territory, addProject, setScenes, navigate]);
 
     const handleReset = useCallback(() => {
         setStep('idle');
@@ -203,63 +205,10 @@ export function ProjectNewPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <h1 className="mb-2">New Project</h1>
+            <h1 className="mb-2">Feature Film</h1>
             <p className="text-lemon-text-muted font-body text-sm mb-8">
-                {step === 'format'
-                    ? 'Choose a format to get started. Each format has its own breakdown, schedule, and budget workflow.'
-                    : "Drop a screenplay PDF. We'll read it and confirm before starting the breakdown."}
+                Drop a screenplay PDF. We'll read it and confirm before starting the breakdown.
             </p>
-
-            {/* ── FORMAT SELECTOR ─────────────────────────────────── */}
-            {step === 'format' && (
-                <div className="space-y-5">
-                    <div className="grid grid-cols-2 gap-4 mb-8">
-                        {/* Feature Film */}
-                        <button
-                            onClick={() => setStep('idle')}
-                            className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
-                        >
-                            <span className="text-3xl mb-3 block">🎬</span>
-                            <p className="font-mono text-[0.6rem] tracking-widest uppercase text-lemon-cyan mb-1">
-                                Single Production
-                            </p>
-                            <h2 className="text-lemon-text-primary mb-2">Feature Film</h2>
-                            <p className="text-lemon-text-muted text-sm leading-relaxed">
-                                One screenplay. Full breakdown, schedule, and budget in a single project.
-                            </p>
-                            <div className="flex flex-wrap gap-2 mt-4">
-                                {['1 Screenplay', '1 Budget', '1 Schedule'].map(t => (
-                                    <span key={t} className="font-mono text-[0.58rem] tracking-wide uppercase px-2 py-0.5 border border-lemon-gray-700 rounded text-lemon-text-muted">
-                                        {t}
-                                    </span>
-                                ))}
-                            </div>
-                        </button>
-
-                        {/* TV Series */}
-                        <button
-                            onClick={() => navigate('/series/new')}
-                            className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
-                        >
-                            <span className="text-3xl mb-3 block">📺</span>
-                            <p className="font-mono text-[0.6rem] tracking-widest uppercase text-lemon-cyan mb-1">
-                                Multi-Episode
-                            </p>
-                            <h2 className="text-lemon-text-primary mb-2">TV Series</h2>
-                            <p className="text-lemon-text-muted text-sm leading-relaxed">
-                                Define your series first, then upload each episode screenplay into its own compartment.
-                            </p>
-                            <div className="flex flex-wrap gap-2 mt-4">
-                                {['N Episodes', 'Series Budget', 'Master Schedule'].map(t => (
-                                    <span key={t} className="font-mono text-[0.58rem] tracking-wide uppercase px-2 py-0.5 border border-lemon-gray-700 rounded text-lemon-text-muted">
-                                        {t}
-                                    </span>
-                                ))}
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* ── CONFIRM CARD ─────────────────────────────────────────── */}
             {step === 'confirm' && parsed && (
@@ -287,15 +236,13 @@ export function ProjectNewPage() {
                         </select>
                         <span className="text-lemon-gray-600">·</span>
                         <select
-                            value={location}
-                            onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
+                            value={territory}
+                            onChange={(e) => setTerritory(e.target.value as ProductionTerritory)}
                             className="bg-transparent text-lemon-text-muted font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none cursor-pointer hover:text-lemon-text-primary transition-colors"
                         >
-                            <option value="cdmx">Mexico City</option>
-                            <option value="guadalajara">Guadalajara</option>
-                            <option value="monterrey">Monterrey</option>
-                            <option value="tijuana">Tijuana</option>
-                            <option value="other">Other</option>
+                            {(Object.entries(TERRITORY_LABELS) as [ProductionTerritory, string][]).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                            ))}
                         </select>
                     </div>
 
@@ -432,7 +379,7 @@ export function ProjectNewPage() {
             )}
 
             {/* ── DROPZONE (idle / processing / error) ─────────────────── */}
-            {step !== 'confirm' && step !== 'format' && (
+            {step !== 'confirm' && (
                 <>
                     {/* Optional pre-fill fields */}
                     {step === 'idle' && (
@@ -460,17 +407,15 @@ export function ProjectNewPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="lemon-label block mb-2">LOCATION</label>
+                                <label className="lemon-label block mb-2">SHOOTING TERRITORY</label>
                                 <select
-                                    value={location}
-                                    onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
+                                    value={territory}
+                                    onChange={(e) => setTerritory(e.target.value as ProductionTerritory)}
                                     className="w-full px-4 py-3 bg-lemon-bg-secondary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
                                 >
-                                    <option value="cdmx">CDMX</option>
-                                    <option value="guadalajara">Guadalajara</option>
-                                    <option value="monterrey">Monterrey</option>
-                                    <option value="tijuana">Tijuana</option>
-                                    <option value="other">Other</option>
+                                    {(Object.entries(TERRITORY_LABELS) as [ProductionTerritory, string][]).map(([k, v]) => (
+                                        <option key={k} value={k}>{v}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>

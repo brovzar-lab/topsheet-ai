@@ -9,7 +9,10 @@ import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Calendar, ChevronLeft, ChevronRight, User2 } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useSceneStore } from '@/stores/scene-store';
 import type { ShootDay } from '@/types';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = [
@@ -89,6 +92,10 @@ export function CalendarPage() {
     const datedDays = schedule?.shootDays.filter((d) => d.date).length ?? 0;
     const undatedDays = (schedule?.shootDays.length ?? 0) - datedDays;
 
+    const breakdowns = useBreakdownStore((s) => s.breakdowns);
+    const scenes = useSceneStore((s) => s.getScenes(projectId ?? ''));
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
+
     if (!projectId) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -116,7 +123,8 @@ export function CalendarPage() {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full">
+            <div className="flex flex-col flex-1 min-w-0">
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -231,6 +239,26 @@ export function CalendarPage() {
                     </div>
                 )}
             </div>
+        </div>
+            {/* ── Rafa (1st AD) panel ── */}
+            <AssistantDirectorPanel
+                projectId={projectId ?? ''}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                context={null}
+                snapshot={{
+                    projectId: projectId ?? '',
+                    schedule: schedule ?? undefined,
+                    breakdowns,
+                    activeDayNumber: null,
+                    scenes: scenes.map((sc) => ({
+                        sceneNumber: sc.sceneNumber,
+                        slugline: sc.slugline,
+                        content: sc.content,
+                        pageCount: sc.pageCount,
+                    })),
+                }}
+            />
         </div>
     );
 }

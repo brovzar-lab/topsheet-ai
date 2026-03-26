@@ -14,6 +14,7 @@ import type { SceneBreakdown } from '@/types';
 import { fromCentavos, calcSectionTotals, getSection } from '@/lib/budget/calculator';
 import { BUDGET_CATEGORIES } from '@/data/budget-categories';
 
+const REVOKE_DELAY_MS = 5_000;
 // -----------------------------------------------------------------------
 // Brand colors (hex without #)
 // -----------------------------------------------------------------------
@@ -432,7 +433,6 @@ export async function exportBudgetExcel(
         a.download = filename;
         a.click();
     } finally {
-        // Delay revocation so the browser has time to start the download
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
     }
 }

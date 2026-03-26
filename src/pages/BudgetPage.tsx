@@ -4,13 +4,13 @@
  * Layout: Topsheet summary + line-item table + draft management.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { SeriesEpisodeBudgetPage } from './SeriesEpisodeBudgetPage';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
-    ChevronDown, ChevronUp, Download, CalendarDays, Eye,
+    ChevronDown, ChevronUp, Download, CalendarDays, Eye, Loader2, Bot,
 } from 'lucide-react';
 import { exportBudgetExcel } from '@/lib/export/budget-excel';
 import { exportBudgetPDF, generateBudgetPDFBlob } from '@/lib/export/BudgetPDF';
@@ -19,12 +19,16 @@ import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { formatMXN, formatMXNShort, calcSectionTotals, getSection } from '@/lib/budget/calculator';
+import { formatMXN, formatMXNShort, calcSectionTotals, getSection, fromCentavos, toCentavos } from '@/lib/budget/calculator';
 import { generateAutoBudget } from '@/lib/budget/auto-budget';
 import { cloneDraft, compareDrafts } from '@/lib/budget/draft-manager';
 import type { DraftComparison } from '@/lib/budget/draft-manager';
 import { calculateEFICINE } from '@/lib/budget/eficine';
 import type { BudgetDraft, BudgetSection } from '@/types';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
+import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
 
 // -----------------------------------------------------------------------
 // Section colors
@@ -57,6 +61,7 @@ export function BudgetPage() {
     const tvEpisodeId = searchParams.get('episodeId');
 
     const project = useProjectStore((s) => s.getProject(projectId ?? ''));
+    const isLoadingProjects = useProjectStore((s) => s.isLoadingProjects);
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
     const { drafts, addDraft, getDraftsForProject } = useBudgetStore();
@@ -84,6 +89,20 @@ export function BudgetPage() {
     if (tvSeriesId && tvEpisodeId) {
         return <SeriesEpisodeBudgetPage />;
     }
+
+    // Agent panel state
+    const [lpOpen, setLpOpen] = useState(true);
+    const [adPanelOpen, setAdPanelOpen] = useState(false);
+    const [brainstormOpen, setBrainstormOpen] = useState(false);
+
+    // Snapshot for Sandra — she owns the budget on feature film
+    const lpSnapshot: ProjectSnapshot = {
+        projectId: projectId ?? '',
+        scenes: [],
+        breakdowns,
+        activeSceneNumber: null,
+        budget: projectDrafts[0] ?? null,
+    };
 
     // ---------------------------------------------------------------
     // Actions
@@ -166,11 +185,28 @@ export function BudgetPage() {
     // Guards
     // ---------------------------------------------------------------
 
-    if (!projectId || !project) {
+    if (!projectId) {
         return (
             <div className="p-8 max-w-5xl mx-auto">
                 <h1>Budget</h1>
                 <p className="text-lemon-text-muted">No project selected.</p>
+            </div>
+        );
+    }
+
+    if (!project && isLoadingProjects) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <Loader2 size={24} className="text-lemon-cyan animate-spin" />
+            </div>
+        );
+    }
+
+    if (!project) {
+        return (
+            <div className="p-8 max-w-5xl mx-auto">
+                <h1>Budget</h1>
+                <p className="text-lemon-text-muted">Project not found.</p>
             </div>
         );
     }
@@ -182,8 +218,12 @@ export function BudgetPage() {
     // ---------------------------------------------------------------
 
     return (
-        <div className="p-6 max-w-6xl mx-auto overflow-y-auto">
-            <EpisodeBreadcrumb />
+        <>
+        {brainstormOpen && <BrainstormPanel onClose={() => setBrainstormOpen(false)} />}
+        <div className="flex h-full">
+            {/* ── Main scrollable content ── */}
+            <div className="flex-1 min-w-0 overflow-y-auto p-6">
+                <EpisodeBreadcrumb />
             {/* Header */}
             <span className="lemon-label block mb-2">PROJECT · BUDGET</span>
             <h1 className="mb-1">Budget Drafts</h1>
@@ -230,6 +270,23 @@ export function BudgetPage() {
                     <Zap size={16} />
                     Generate Budget
                 </button>
+
+                <div className="ml-auto flex items-center gap-2">
+                    {/* 1ST AD toggle — Rafa is secondary on Budget */}
+                    <button
+                        onClick={() => setAdPanelOpen((o) => !o)}
+                        title="Open Rafa — AI 1st AD"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-display font-bold uppercase tracking-wider transition-colors ${
+                            adPanelOpen
+                                ? 'bg-lemon-yellow/15 border-lemon-yellow/40 text-lemon-yellow'
+                                : 'bg-lemon-bg-secondary border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-yellow hover:border-lemon-yellow'
+                        }`}
+                    >
+                        <Bot size={12} />
+                        1st AD
+                    </button>
+                    <FigureItOutButton onClick={() => setBrainstormOpen(true)} />
+                </div>
 
                 {selectedDraft && (
                     <>
@@ -336,6 +393,10 @@ export function BudgetPage() {
                     expandedSections={expandedSections}
                     onToggleSection={toggleSection}
                     comparison={comparison}
+                    onUpdateItem={(lineId, field, value) => {
+                        if (!selectedDraft) return;
+                        useBudgetStore.getState().updateLineItem(selectedDraft.id, lineId, field, value);
+                    }}
                 />
             )}
 
@@ -401,7 +462,28 @@ export function BudgetPage() {
                     </div>
                 </div>
             )}
+            </div>
+            {/* ── Sandra (Line Producer) panel — PRIMARY ── */}
+            <LineProducerPanel
+                context={null}
+                snapshot={lpSnapshot}
+                isOpen={lpOpen}
+                onToggle={() => setLpOpen((o) => !o)}
+                side="left"
+                isPrimary={true}
+            />
+            {/* ── Rafa (1st AD) — secondary, no prompts ── */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={null}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId ?? ''}
+                side="right"
+                isPrimary={false}
+            />
         </div>
+        </>
     );
 }
 
@@ -499,11 +581,13 @@ function LineItemTable({
     expandedSections,
     onToggleSection,
     comparison,
+    onUpdateItem,
 }: {
     draft: BudgetDraft;
     expandedSections: Set<BudgetSection>;
     onToggleSection: (s: BudgetSection) => void;
     comparison: DraftComparison | null;
+    onUpdateItem?: (lineId: string, field: 'rateCentavos' | 'quantity' | 'duration' | 'description', value: number | string) => void;
 }) {
     const sections: BudgetSection[] = ['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'];
 
@@ -557,7 +641,6 @@ function LineItemTable({
                                 </thead>
                                 <tbody>
                                     {sectionItems.map((item) => {
-                                        // Check comparison
                                         const diffItem = comparison?.items.find(
                                             (d) => d.categoryCode === item.categoryCode && d.description === item.description,
                                         );
@@ -584,13 +667,33 @@ function LineItemTable({
                                                     {item.unit}
                                                 </td>
                                                 <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {formatMXN(item.rateCentavos, true)}
+                                                    {onUpdateItem ? (
+                                                        <EditableCell
+                                                            value={fromCentavos(item.rateCentavos)}
+                                                            onCommit={(v) => onUpdateItem(item.id, 'rateCentavos', toCentavos(v))}
+                                                            format={(v) => formatMXN(toCentavos(v), true)}
+                                                        />
+                                                    ) : formatMXN(item.rateCentavos, true)}
                                                 </td>
                                                 <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {item.quantity}
+                                                    {onUpdateItem ? (
+                                                        <EditableCell
+                                                            value={item.quantity}
+                                                            onCommit={(v) => onUpdateItem(item.id, 'quantity', Math.max(1, Math.round(v)))}
+                                                            format={(v) => String(Math.round(v))}
+                                                            integer
+                                                        />
+                                                    ) : item.quantity}
                                                 </td>
                                                 <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {item.duration}
+                                                    {onUpdateItem ? (
+                                                        <EditableCell
+                                                            value={item.duration}
+                                                            onCommit={(v) => onUpdateItem(item.id, 'duration', Math.max(1, Math.round(v)))}
+                                                            format={(v) => String(Math.round(v))}
+                                                            integer
+                                                        />
+                                                    ) : item.duration}
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono font-bold text-lemon-text-primary">
                                                     {formatMXN(item.subtotalCentavos, true)}
@@ -1020,5 +1123,71 @@ function EFICINEPanel({ draft }: { draft: BudgetDraft }) {
                 </div>
             )}
         </div>
+    );
+}
+
+// -----------------------------------------------------------------------
+// EditableCell — inline editing for numeric budget fields
+// -----------------------------------------------------------------------
+
+function EditableCell({
+    value,
+    onCommit,
+    format,
+    integer,
+}: {
+    value: number;
+    onCommit: (v: number) => void;
+    format?: (v: number) => string;
+    integer?: boolean;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(String(value));
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (editing && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [editing]);
+
+    const commitValue = () => {
+        const parsed = integer ? parseInt(draft, 10) : parseFloat(draft);
+        if (!isNaN(parsed) && parsed !== value) {
+            onCommit(parsed);
+        }
+        setEditing(false);
+    };
+
+    if (editing) {
+        return (
+            <input
+                ref={inputRef}
+                type="number"
+                step={integer ? '1' : '0.01'}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commitValue}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitValue();
+                    if (e.key === 'Escape') setEditing(false);
+                }}
+                className="w-full bg-lemon-bg-tertiary border border-lemon-cyan/50 rounded px-1.5 py-0.5 text-right font-mono text-sm text-lemon-text-primary focus:outline-none focus:border-lemon-cyan"
+            />
+        );
+    }
+
+    return (
+        <span
+            onDoubleClick={() => {
+                setDraft(String(value));
+                setEditing(true);
+            }}
+            className="cursor-pointer hover:text-lemon-cyan hover:underline hover:underline-offset-2 transition-colors"
+            title="Double-click to edit"
+        >
+            {format ? format(value) : String(value)}
+        </span>
     );
 }

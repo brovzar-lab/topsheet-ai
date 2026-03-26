@@ -4,7 +4,9 @@ import { useAuthStore } from '../stores/auth-store';
 import { useSeriesStore } from '../stores/series-store';
 import { deriveRuntimeTemplate } from '../types/series';
 import type { SeriesFormat, CreateSeriesInput } from '../types/series';
-import type { ProductionTier, PrimaryLocation } from '../types/project';
+import type { ProductionTier } from '../types/project';
+import type { ProductionTerritory } from '../lib/territory-knowledge';
+import { TERRITORY_LABELS } from '../lib/territory-knowledge';
 
 const RUNTIME_PRESETS = [22, 44, 60, 90] as const;
 const EP_COUNT_PRESETS = [6, 8, 10, 13, 20] as const;
@@ -33,7 +35,7 @@ export function SeriesNewPage() {
   const [title, setTitle] = useState('');
   const [season, setSeason] = useState(1);
   const [format, setFormat] = useState<SeriesFormat>('drama');
-  const [location, setLocation] = useState<PrimaryLocation>('cdmx');
+  const [territory, setTerritory] = useState<ProductionTerritory>('mexico');
   const [tier, setTier] = useState<ProductionTier>('mid');
   const [episodeCount, setEpisodeCount] = useState(8);
   const [runtimeMinutes, setRuntimeMinutes] = useState(44);
@@ -55,7 +57,8 @@ export function SeriesNewPage() {
         title: title.trim(),
         season,
         format,
-        location,
+        location: 'cdmx', // legacy field kept for compat
+        territory,
         tier,
         episodeCount,
         runtimeMinutes: effectiveRuntime,
@@ -137,17 +140,15 @@ export function SeriesNewPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="lemon-label block mb-1.5">Production Location</label>
+              <label className="lemon-label block mb-1.5">Shooting Territory</label>
               <select
-                value={location}
-                onChange={e => setLocation(e.target.value as PrimaryLocation)}
+                value={territory}
+                onChange={e => setTerritory(e.target.value as ProductionTerritory)}
                 className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
               >
-                <option value="cdmx">Mexico City, MX</option>
-                <option value="guadalajara">Guadalajara, MX</option>
-                <option value="monterrey">Monterrey, MX</option>
-                <option value="tijuana">Tijuana, MX</option>
-                <option value="other">Other</option>
+                {(Object.entries(TERRITORY_LABELS) as [ProductionTerritory, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
               </select>
             </div>
             <div>

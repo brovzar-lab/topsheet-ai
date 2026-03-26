@@ -43,6 +43,7 @@ import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { detectConflicts } from '@/lib/schedule/conflict-detector';
 import { getCategoryById } from '@/data/element-categories';
+import { exportScheduleExcel } from '@/lib/export/schedule-excel';
 import { AssistantDirectorPanel, type ADPanelContext } from '@/components/AssistantDirectorPanel';
 
 // -----------------------------------------------------------------------
@@ -538,7 +539,7 @@ function DayGroup({
     }, [day.strips]);
 
     return (
-        <div className="mb-4">
+        <div className="mb-4" data-day-number={day.dayNumber}>
             {/* Day header */}
             <div
                 className="flex items-center gap-3 px-3 py-2 bg-lemon-bg-elevated rounded-t border border-lemon-gray-700 cursor-pointer hover:bg-lemon-bg-secondary/80 transition-colors"
@@ -808,7 +809,7 @@ export function SchedulePage() {
             let targetDayId = activeData.dayId;
             let targetIndex = 0;
 
-            // Check if "over" is another strip
+
             const overData = over.data.current as { dayId: string; strip: StripboardStrip } | undefined;
             if (overData) {
                 targetDayId = overData.dayId;
@@ -966,6 +967,15 @@ export function SchedulePage() {
                         >
                             <RefreshCw size={12} /> REGENERATE
                         </button>
+                        {schedule && (
+                            <button
+                                onClick={() => exportScheduleExcel(schedule, `Project_${projectId}`)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body
+                                    font-mono text-xs rounded hover:border-lemon-yellow hover:text-lemon-yellow transition-colors"
+                            >
+                                ↓ EXPORT XLSX
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -1055,7 +1065,16 @@ export function SchedulePage() {
                                     onClick={() => {
                                         // Find the affected day number
                                         const dayNum = c.dayNumber ?? null;
-                                        if (dayNum) setActiveDayNumber(dayNum);
+                                        if (dayNum) {
+                                            setActiveDayNumber(dayNum);
+                                            // Scroll to the day element and flash-highlight it
+                                            const dayEl = document.querySelector(`[data-day-number="${dayNum}"]`);
+                                            if (dayEl) {
+                                                dayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                dayEl.classList.add('ring-2', 'ring-lemon-cyan', 'rounded-lg');
+                                                setTimeout(() => dayEl.classList.remove('ring-2', 'ring-lemon-cyan', 'rounded-lg'), 1500);
+                                            }
+                                        }
                                         // Open Rafa with context
                                         setAdContext({ dayNumber: dayNum ?? 0, issue: c.message });
                                         setAdPanelOpen(true);
@@ -1136,12 +1155,18 @@ export function SchedulePage() {
                     isOpen={adPanelOpen}
                     onToggle={() => setAdPanelOpen(v => !v)}
                     context={adContext}
-                    snapshot={schedule ? {
+                    snapshot={{
                         projectId,
-                        schedule,
+                        schedule: schedule ?? undefined,
                         breakdowns,
                         activeDayNumber,
-                    } : null}
+                        scenes: scenes.map((sc) => ({
+                            sceneNumber: sc.sceneNumber,
+                            slugline: sc.slugline,
+                            content: sc.content,
+                            pageCount: sc.pageCount,
+                        })),
+                    }}
                 />
             </div>
         </div>

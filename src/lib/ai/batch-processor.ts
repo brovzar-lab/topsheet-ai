@@ -66,13 +66,13 @@ export async function processBreakdownBatch(
     scenes: Scene[],
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
+    skillContext?: string,
 ): Promise<BatchResult> {
     const succeeded: SceneBreakdown[] = [];
     const failed: FailedScene[] = [];
     const total = scenes.length;
 
     for (let i = 0; i < scenes.length; i++) {
-        // Check for cancellation
         if (signal?.aborted) break;
 
         const scene = scenes[i]!;
@@ -91,6 +91,7 @@ export async function processBreakdownBatch(
                 scene.sceneNumber,
                 scene.content,
                 scene.slugline.raw,
+                skillContext,
             );
 
             succeeded.push({

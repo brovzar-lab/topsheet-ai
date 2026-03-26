@@ -13,8 +13,11 @@ import { useParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSeriesStore } from '@/stores/series-store';
 import { useScheduleStore } from '@/stores/schedule-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
 import { buildDoodMatrix, countWorkDays, countHoldDays } from '@/lib/schedule/dood-matrix';
 import type { RosterEntry } from '@/types/series';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
 
 // ── Blank entry form state ────────────────────────────────
 
@@ -52,6 +55,14 @@ export function SeriesRosterPage() {
 
   const [form, setForm] = useState<NewEntryForm>(BLANK_FORM);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [lpOpen, setLpOpen] = useState(true);
+  const breakdowns = useBreakdownStore((s) => s.breakdowns);
+  const lpSnapshot: ProjectSnapshot = {
+    projectId: seriesId ?? '',
+    scenes: [],
+    breakdowns,
+    activeSceneNumber: null,
+  };
 
   useEffect(() => {
     if (!seriesId || !user?.uid) return;
@@ -159,7 +170,8 @@ export function SeriesRosterPage() {
   if (!seriesId) return null;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="flex h-full">
+      <div className="flex-1 min-w-0 overflow-y-auto p-8">
       <span className="lemon-label block mb-2">SERIES · ROSTER</span>
       <h1 className="mb-1">Cast &amp; Crew Roster</h1>
       <p className="text-lemon-text-muted font-body text-sm mb-8">
@@ -456,6 +468,14 @@ export function SeriesRosterPage() {
           </div>
         </div>
       )}
+      </div>
+      {/* ── Sandra (Line Producer) panel ── */}
+      <LineProducerPanel
+        context={null}
+        snapshot={lpSnapshot}
+        isOpen={lpOpen}
+        onToggle={() => setLpOpen((o) => !o)}
+      />
     </div>
   );
 }

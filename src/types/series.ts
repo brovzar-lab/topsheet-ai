@@ -1,4 +1,4 @@
-import type { ProductionTier, PrimaryLocation } from './project';
+import type { ProductionTier, PrimaryLocation, ProductionTerritory } from './project';
 
 export type SeriesFormat =
   | 'drama'
@@ -23,6 +23,8 @@ export interface Series {
   season: number;
   format: SeriesFormat;
   location: PrimaryLocation;
+  /** Shooting territory — drives Rafa + Sandra knowledge context */
+  territory?: ProductionTerritory;
   tier: ProductionTier;
   episodeCount: number;
   /** Counter used to assign the next airNumber when adding episodes to an existing series */
@@ -95,6 +97,8 @@ export interface CreateSeriesInput {
   season: number;
   format: SeriesFormat;
   location: PrimaryLocation;
+  /** Shooting territory — Mexico | Spain | Colombia */
+  territory?: ProductionTerritory;
   tier: ProductionTier;
   episodeCount: number;
   runtimeMinutes: number;

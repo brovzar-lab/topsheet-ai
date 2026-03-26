@@ -1,11 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSeriesStore } from '@/stores/series-store';
 import { useBudgetStore } from '@/stores/budget-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
 import { formatMXN } from '@/lib/budget/calculator';
 import type { Episode } from '@/types/series';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 
 // Copy of threshold helper from SeriesEpisodeBudgetPage for consistency
 function getBudgetThreshold(episodeCount: number): { warn: number; flag: number } {
@@ -49,6 +53,16 @@ export function SeriesBudgetPage() {
     loadSeries(user.uid, seriesId);
     loadEpisodes(user.uid, seriesId);
   }, [seriesId, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [lpOpen, setLpOpen] = useState(true);
+  const [adPanelOpen, setAdPanelOpen] = useState(false); // secondary — starts collapsed
+  const breakdowns = useBreakdownStore((s) => s.breakdowns);
+  const lpSnapshot: ProjectSnapshot = {
+    projectId: seriesId ?? '',
+    scenes: [],
+    breakdowns,
+    activeSceneNumber: null,
+  };
 
   if (!seriesId) return null;
   if (isLoading || isLoadingEpisodes) {
@@ -107,7 +121,8 @@ export function SeriesBudgetPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="flex h-full">
+      <div className="flex-1 min-w-0 overflow-y-auto p-8">
       <span className="lemon-label block mb-2">SERIES · BUDGET</span>
       <h1 className="mb-1">{activeSeries?.title ?? 'Series Budget'}</h1>
       <p className="text-lemon-text-muted font-body text-sm mb-6">
@@ -297,6 +312,26 @@ export function SeriesBudgetPage() {
           </div>
         )}
       </div>
+      </div>
+      {/* ── Sandra (Line Producer) panel — PRIMARY ── */}
+      <LineProducerPanel
+        context={null}
+        snapshot={lpSnapshot}
+        isOpen={lpOpen}
+        onToggle={() => setLpOpen((o) => !o)}
+        side="left"
+        isPrimary={true}
+      />
+      {/* ── Rafa (1st AD) — secondary, starts collapsed ── */}
+      <AssistantDirectorPanel
+        context={null}
+        snapshot={null}
+        isOpen={adPanelOpen}
+        onToggle={() => setAdPanelOpen((o) => !o)}
+        projectId={seriesId ?? ''}
+        side="right"
+        isPrimary={false}
+      />
     </div>
   );
 }

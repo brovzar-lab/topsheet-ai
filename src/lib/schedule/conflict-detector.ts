@@ -9,6 +9,10 @@
 
 import type { ScheduleDraft } from '@/types';
 
+const OVERLOAD_WARNING_THRESHOLD = 1.25;
+const OVERLOAD_ERROR_THRESHOLD = 1.5;
+const MAX_CONSECUTIVE_WORK_DAYS = 7;
+
 export type ConflictSeverity = 'error' | 'warning' | 'info';
 
 export interface ScheduleConflict {
@@ -28,13 +32,13 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
 
     // ── 1. Overloaded days ──
     for (const day of schedule.shootDays) {
-        if (day.totalPages > schedule.targetPagesPerDay * 1.25) {
+        if (day.totalPages > schedule.targetPagesPerDay * OVERLOAD_WARNING_THRESHOLD) {
             const pagesDisplay = `${(day.totalPages / 8).toFixed(1)}`;
             const targetDisplay = `${(schedule.targetPagesPerDay / 8).toFixed(1)}`;
             conflicts.push({
                 id: `conflict_${conflictId++}`,
                 type: 'day_overloaded',
-                severity: day.totalPages > schedule.targetPagesPerDay * 1.5 ? 'error' : 'warning',
+                severity: day.totalPages > schedule.targetPagesPerDay * OVERLOAD_ERROR_THRESHOLD ? 'error' : 'warning',
                 message: `Day ${day.dayNumber} has ${pagesDisplay} pages (target: ${targetDisplay})`,
                 dayNumber: day.dayNumber,
                 entities: [day.id],
@@ -101,12 +105,11 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
     }
     for (const [char, days] of charDays) {
         const sorted = [...new Set(days)].sort((a, b) => a - b);
-        // Check for 7+ consecutive day stretches
         let consecutive = 1;
         for (let i = 1; i < sorted.length; i++) {
             if (sorted[i] === sorted[i - 1]! + 1) {
                 consecutive++;
-                if (consecutive >= 7) {
+                if (consecutive >= MAX_CONSECUTIVE_WORK_DAYS) {
                     conflicts.push({
                         id: `conflict_${conflictId++}`,
                         type: 'cast_double_book',
