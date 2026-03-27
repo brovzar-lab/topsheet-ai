@@ -151,6 +151,7 @@ function InlineInput({
 
     return (
         <input
+            aria-label="Edit value"
             ref={ref}
             value={val}
             onChange={(e) => setVal(e.target.value)}
@@ -274,6 +275,7 @@ function StripSynopsis({
                         onKeyDown={(e) => {
                             if (e.key === 'Escape') { setEditingNotes(false); setNotesVal(strip.notes ?? ''); }
                         }}
+                        aria-label="Scene notes"
                         autoFocus
                         rows={2}
                         className="w-full bg-lemon-bg-primary border border-lemon-gray-600 rounded px-2 py-1 text-xs text-lemon-text-body font-mono outline-none focus:border-lemon-cyan resize-none"
@@ -557,6 +559,7 @@ function DayGroup({
                 </span>
 
                 <input
+                    aria-label="Shoot date"
                     type="date"
                     value={day.date ?? ''}
                     onChange={(e) => onSetDayDate(day.id, e.target.value)}
@@ -954,6 +957,7 @@ export function SchedulePage() {
                         </div>
 
                         <button
+                            data-testid="add-day-button"
                             onClick={() => addDay(projectId)}
                             className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body
                                 font-mono text-xs rounded hover:bg-lemon-bg-elevated transition-colors"
@@ -1005,6 +1009,7 @@ export function SchedulePage() {
                             <Clock size={10} className="text-lemon-text-muted" />
                             <span className="font-mono text-[0.6rem] text-lemon-text-muted">hrs/day</span>
                             <input
+                                aria-label="Hours per day"
                                 type="number"
                                 min={6}
                                 max={18}
@@ -1020,6 +1025,7 @@ export function SchedulePage() {
                             <CalendarDays size={10} className="text-lemon-text-muted" />
                             <span className="font-mono text-[0.6rem] text-lemon-text-muted">days/wk</span>
                             <input
+                                aria-label="Shoot days per week"
                                 type="number"
                                 min={4}
                                 max={7}

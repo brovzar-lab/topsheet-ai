@@ -47,7 +47,7 @@ const EMPTY_SCENES: import('@/types').Scene[] = [];
 const ERROR_TYPE_LABELS: Record<string, { label: string; color: string }> = {
     quota: { label: 'QUOTA', color: '#f59e0b' },
     auth:  { label: 'AUTH',  color: '#ef4444' },
-    parse: { label: 'PARSE', color: '#8b5cf6' },
+    parse: { label: 'PARSE', color: '#06b6d4' },
     content_filter: { label: 'CONTENT FILTER', color: '#f97316' },
     unknown: { label: 'ERROR', color: '#6b7280' },
 };
@@ -392,6 +392,7 @@ export function BreakdownPage() {
                             Max
                         </label>
                         <input
+                            aria-label="Maximum scenes to analyze"
                             type="number"
                             min={0}
                             max={scenes.length}
@@ -403,6 +404,7 @@ export function BreakdownPage() {
 
                     {!isRunning ? (
                         <button
+                            data-testid="breakdown-run-button"
                             onClick={runBreakdown}
                             disabled={!apiKey || scenes.length === 0}
                             className="flex items-center gap-2 px-5 py-2.5 bg-lemon-cyan text-lemon-black font-display font-bold uppercase text-sm rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -548,6 +550,7 @@ export function BreakdownPage() {
                                         {currentBreakdown.elements.length} ELEMENTS
                                     </span>
                                     <button
+                                        data-testid="add-element-button"
                                         onClick={() => setShowAddModal(true)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-lemon-text-muted hover:text-lemon-cyan border border-lemon-gray-700 rounded hover:border-lemon-cyan transition-colors"
                                     >
@@ -596,6 +599,7 @@ export function BreakdownPage() {
 
                             <label className="block text-xs text-lemon-text-muted mb-1">Name</label>
                             <input
+                                aria-label="New element name"
                                 type="text"
                                 value={newElementName}
                                 onChange={(e) => setNewElementName(e.target.value)}
@@ -787,6 +791,7 @@ function ElementGrid({
                                 .map((sceneNum) => (
                                     <label key={sceneNum} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-lemon-bg-elevated/50 cursor-pointer">
                                         <input
+                                            aria-label={`Copy element to scene ${sceneNum}`}
                                             type="checkbox"
                                             checked={selectedTargets.has(sceneNum)}
                                             onChange={() => {
