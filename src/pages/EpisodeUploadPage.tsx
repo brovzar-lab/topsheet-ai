@@ -315,6 +315,7 @@ export function EpisodeUploadPage() {
                                 <div className="flex-1 min-w-0">
                                     {/* Title as editable input */}
                                     <input
+                                        aria-label="Episode title"
                                         type="text"
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
@@ -364,6 +365,7 @@ export function EpisodeUploadPage() {
                         <div className="border border-lemon-gray-700 rounded-xl bg-lemon-bg-secondary/40 px-6 py-4">
                             <label className="lemon-label block mb-1.5">EPISODE TITLE</label>
                             <input
+                                aria-label="Episode title"
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
@@ -448,6 +450,7 @@ export function EpisodeUploadPage() {
                                     : 'border-lemon-gray-700 hover:border-lemon-cyan/40'}`}
                     >
                         <input
+                            aria-label="Upload PDF screenplay"
                             ref={fileInputRef}
                             type="file"
                             accept=".pdf"

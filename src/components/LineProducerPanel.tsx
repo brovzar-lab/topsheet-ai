@@ -715,13 +715,13 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
         } finally {
             setIsLoading(false);
         }
-    }, [input, apiKey, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult]);
+    }, [input, apiKey, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult, setMessagesStable]);
 
     const clearChat = useCallback(() => {
         setMessages([]);
         setInput('');
         prevContextRef.current = null;
-    }, []);
+    }, [setMessages]);
 
     const copyAll = useCallback(() => {
         const text = messages.map(m => `${m.role === 'user' ? 'You' : 'Sandra'}: ${m.content}`).join('\n\n');

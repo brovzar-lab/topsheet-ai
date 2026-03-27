@@ -242,6 +242,7 @@ export function SeriesRosterPage() {
                     {/* Sticky: SR badge */}
                     <td className="sticky left-[400px] z-10 bg-lemon-bg-secondary px-4 py-2.5 text-center">
                       <button
+                        aria-label={entry.isSeriesRegular ? 'Remove series regular' : 'Mark as series regular'}
                         onClick={() => handleToggleSR(entry)}
                         title={entry.isSeriesRegular ? 'Remove series regular' : 'Mark as series regular'}
                         className={`font-mono text-[0.5rem] tracking-wider uppercase px-1.5 py-0.5 rounded border transition-colors ${
@@ -289,6 +290,7 @@ export function SeriesRosterPage() {
                   <tr className="bg-lemon-bg-primary/50">
                     <td className="sticky left-0 z-10 bg-lemon-bg-primary/50 px-3 py-2">
                       <input
+                        aria-label="Cast or crew member name"
                         autoFocus
                         placeholder="Name"
                         value={form.name}
@@ -299,6 +301,7 @@ export function SeriesRosterPage() {
                     </td>
                     <td className="sticky left-[160px] z-10 bg-lemon-bg-primary/50 px-3 py-2">
                       <input
+                        aria-label="Role or position"
                         placeholder="Role"
                         value={form.role}
                         onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
@@ -308,6 +311,7 @@ export function SeriesRosterPage() {
                     </td>
                     <td className="sticky left-[280px] z-10 bg-lemon-bg-primary/50 px-3 py-2">
                       <input
+                        aria-label="Department"
                         placeholder="Department"
                         value={form.department}
                         onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}

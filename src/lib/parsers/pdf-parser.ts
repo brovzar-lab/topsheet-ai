@@ -131,6 +131,7 @@ export async function extractTextFromPDF(file: File): Promise<PDFParseResult> {
         pages.push(pageText);
     }
 
+    // eslint-disable-next-line no-control-regex
     const fullText = pages.join('\n').replace(/\x0c/g, '');
     const lastPageStamp = detectLastPageStamp(pages, pdf.numPages);
 

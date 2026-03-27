@@ -1,25 +1,35 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { AuthGate } from './components/AuthGate';
+import { Loader2 } from 'lucide-react';
 
-import { HomeScreen } from './pages/HomeScreen';
-import { ProjectNewPage } from './pages/ProjectNewPage';
-import { ProjectPage } from './pages/ProjectPage';
-import { BreakdownPage } from './pages/BreakdownPage';
-import { SchedulePage } from './pages/SchedulePage';
-import { BudgetPage } from './pages/BudgetPage';
-import { DOODsPage } from './pages/DOODsPage';
-import { ElementsPage } from './pages/ElementsPage';
-import { CalendarPage } from './pages/CalendarPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { SeriesNewPage } from './pages/SeriesNewPage';
-import { SeriesDashboardPage } from './pages/SeriesDashboardPage';
-import { SeriesBudgetPage } from './pages/SeriesBudgetPage';
-import { SeriesMasterSchedulePage } from './pages/SeriesMasterSchedulePage';
-import { SeriesRosterPage } from './pages/SeriesRosterPage';
-import { EpisodeUploadPage } from './pages/EpisodeUploadPage';
+// Route-level pages — lazy loaded so each route only ships what it needs
+const HomeScreen = lazy(() => import('./pages/HomeScreen').then(m => ({ default: m.HomeScreen })));
+const ProjectNewPage = lazy(() => import('./pages/ProjectNewPage').then(m => ({ default: m.ProjectNewPage })));
+const ProjectPage = lazy(() => import('./pages/ProjectPage').then(m => ({ default: m.ProjectPage })));
+const BreakdownPage = lazy(() => import('./pages/BreakdownPage').then(m => ({ default: m.BreakdownPage })));
+const SchedulePage = lazy(() => import('./pages/SchedulePage').then(m => ({ default: m.SchedulePage })));
+const BudgetPage = lazy(() => import('./pages/BudgetPage').then(m => ({ default: m.BudgetPage })));
+const DOODsPage = lazy(() => import('./pages/DOODsPage').then(m => ({ default: m.DOODsPage })));
+const ElementsPage = lazy(() => import('./pages/ElementsPage').then(m => ({ default: m.ElementsPage })));
+const CalendarPage = lazy(() => import('./pages/CalendarPage').then(m => ({ default: m.CalendarPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const SeriesNewPage = lazy(() => import('./pages/SeriesNewPage').then(m => ({ default: m.SeriesNewPage })));
+const SeriesDashboardPage = lazy(() => import('./pages/SeriesDashboardPage').then(m => ({ default: m.SeriesDashboardPage })));
+const SeriesBudgetPage = lazy(() => import('./pages/SeriesBudgetPage').then(m => ({ default: m.SeriesBudgetPage })));
+const SeriesMasterSchedulePage = lazy(() => import('./pages/SeriesMasterSchedulePage').then(m => ({ default: m.SeriesMasterSchedulePage })));
+const SeriesRosterPage = lazy(() => import('./pages/SeriesRosterPage').then(m => ({ default: m.SeriesRosterPage })));
+const EpisodeUploadPage = lazy(() => import('./pages/EpisodeUploadPage').then(m => ({ default: m.EpisodeUploadPage })));
+
+function PageLoader() {
+    return (
+        <div className="flex h-full items-center justify-center">
+            <Loader2 size={24} className="text-lemon-cyan animate-spin" />
+        </div>
+    );
+}
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAuthStore } from './stores/auth-store';
 import { useProjectStore } from './stores/project-store';
@@ -61,19 +71,35 @@ export default function App() {
 
     return (
         <AuthGate>
+            <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-lemon-cyan focus:text-lemon-black focus:font-mono focus:text-xs focus:rounded focus:uppercase focus:tracking-wider"
+            >
+                Skip to main content
+            </a>
             <div className="flex h-screen overflow-hidden">
                 <Sidebar />
-                <main className="flex-1 overflow-y-auto">
+                <main id="main-content" className="flex-1 overflow-y-auto">
+                    <Suspense fallback={<PageLoader />}>
                     <Routes>
                         <Route path="/" element={<HomeScreen />} />
                         <Route path="/project/new" element={<ProjectNewPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/series/new" element={<SeriesNewPage />} />
-                        <Route path="/series/:seriesId/upload/:episodeId" element={<EpisodeUploadPage />} />
-                        <Route path="/series/:seriesId" element={<SeriesDashboardPage />} />
-                        <Route path="/series/:seriesId/budget" element={<SeriesBudgetPage />} />
-                        <Route path="/series/:seriesId/schedule" element={<SeriesMasterSchedulePage />} />
-                        <Route path="/series/:seriesId/roster" element={<SeriesRosterPage />} />
+                        <Route
+                            path="/series/:seriesId/*"
+                            element={
+                                <ErrorBoundary>
+                                    <Routes>
+                                        <Route index element={<SeriesDashboardPage />} />
+                                        <Route path="budget" element={<SeriesBudgetPage />} />
+                                        <Route path="schedule" element={<SeriesMasterSchedulePage />} />
+                                        <Route path="roster" element={<SeriesRosterPage />} />
+                                        <Route path="upload/:episodeId" element={<EpisodeUploadPage />} />
+                                    </Routes>
+                                </ErrorBoundary>
+                            }
+                        />
                         <Route
                             path="/project/:id/*"
                             element={
@@ -94,6 +120,7 @@ export default function App() {
                             }
                         />
                     </Routes>
+                    </Suspense>
                 </main>
             </div>
         </AuthGate>

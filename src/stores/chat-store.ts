@@ -1,17 +1,18 @@
 /**
- * chat-store.ts — Persistent in-memory store for Sandra + Rafa chat threads.
+ * chat-store.ts — Persistent store for Sandra + Rafa chat threads.
  *
  * Why Zustand instead of component state:
  *   Both panels live on separate pages (BreakdownPage / SchedulePage). When
  *   the user navigates away the component unmounts and React state is wiped.
  *   A Zustand store lives for the entire browser session, so conversations
- *   survive page navigation without any persistence middleware.
+ *   survive page navigation.
  *
- * Also stores the last-rendered system prompt for each agent so that
- * cross-agent consults can invoke the other AI even when its panel is unmounted.
+ * Uses Zustand `persist` middleware to survive page refresh too.
+ * System prompts are excluded from persistence — they're rebuilt every render.
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 // -----------------------------------------------------------------------
 // Shared message type (imported by both panels)
@@ -41,6 +42,9 @@ export interface ChatMessage {
 // Store interface
 // -----------------------------------------------------------------------
 
+/** Max messages persisted per agent to avoid localStorage bloat. */
+const MAX_PERSISTED_MESSAGES = 100;
+
 interface ChatStore {
     // ── Persistent message threads ──────────────────────────────────────
     sandraMessages: ChatMessage[];
@@ -63,22 +67,34 @@ interface ChatStore {
 // Store
 // -----------------------------------------------------------------------
 
-export const useChatStore = create<ChatStore>((set) => ({
-    sandraMessages: [],
-    rafaMessages:  [],
-    sandraSystemPrompt: '',
-    rafaSystemPrompt:  '',
+export const useChatStore = create<ChatStore>()(
+    persist(
+        (set) => ({
+            sandraMessages: [],
+            rafaMessages:  [],
+            sandraSystemPrompt: '',
+            rafaSystemPrompt:  '',
 
-    setSandraMessages: (updater) =>
-        set((state) => ({
-            sandraMessages: typeof updater === 'function' ? updater(state.sandraMessages) : updater,
-        })),
+            setSandraMessages: (updater) =>
+                set((state) => ({
+                    sandraMessages: typeof updater === 'function' ? updater(state.sandraMessages) : updater,
+                })),
 
-    setRafaMessages: (updater) =>
-        set((state) => ({
-            rafaMessages: typeof updater === 'function' ? updater(state.rafaMessages) : updater,
-        })),
+            setRafaMessages: (updater) =>
+                set((state) => ({
+                    rafaMessages: typeof updater === 'function' ? updater(state.rafaMessages) : updater,
+                })),
 
-    setSandraSystemPrompt: (prompt) => set({ sandraSystemPrompt: prompt }),
-    setRafaSystemPrompt:  (prompt) => set({ rafaSystemPrompt:  prompt }),
-}));
+            setSandraSystemPrompt: (prompt) => set({ sandraSystemPrompt: prompt }),
+            setRafaSystemPrompt:  (prompt) => set({ rafaSystemPrompt:  prompt }),
+        }),
+        {
+            name: 'lemon-chat-threads',
+            // Only persist message arrays — system prompts are runtime-only
+            partialize: (state) => ({
+                sandraMessages: state.sandraMessages.slice(-MAX_PERSISTED_MESSAGES),
+                rafaMessages:   state.rafaMessages.slice(-MAX_PERSISTED_MESSAGES),
+            }),
+        },
+    ),
+);

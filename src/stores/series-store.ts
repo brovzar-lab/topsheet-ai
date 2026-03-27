@@ -4,12 +4,15 @@ import type { Series, Episode, CreateSeriesInput, RosterEntry } from '@/types/se
 import {
     createSeries as fsCreateSeries,
     getAllSeries,
+    getSeries,
     updateSeries as fsUpdateSeries,
     createEpisodes as fsCreateEpisodes,
     getEpisodes,
     updateEpisode as fsUpdateEpisode,
     addRosterEntry as fsAddRosterEntry,
     updateRosterEntry as fsUpdateRosterEntry,
+    getRosterEntries,
+    deleteSeries as fsDeleteSeries,
 } from '@/lib/firestore/series';
 
 interface SeriesState {
@@ -77,7 +80,6 @@ export const useSeriesStore = create<SeriesState>()(
             const allSeries = get().allSeries;
             let series = allSeries.find((s) => s.id === seriesId) ?? null;
             if (!series) {
-                const { getSeries } = await import('@/lib/firestore/series');
                 series = await getSeries(uid, seriesId);
             }
             set({ activeSeries: series, isLoading: false });
@@ -137,7 +139,6 @@ export const useSeriesStore = create<SeriesState>()(
     loadRoster: async (uid, seriesId) => {
         set({ isLoadingRoster: true });
         try {
-            const { getRosterEntries } = await import('@/lib/firestore/series');
             const entries = await getRosterEntries(uid, seriesId);
             set({ rosterEntries: entries, isLoadingRoster: false });
         } catch {
@@ -164,12 +165,7 @@ export const useSeriesStore = create<SeriesState>()(
             allSeries: state.allSeries.filter((s) => s.id !== seriesId),
             activeSeries: state.activeSeries?.id === seriesId ? null : state.activeSeries,
         }));
-        // Lazy import to avoid circular dependencies
-        import('@/lib/firestore/series')
-            .then(({ deleteSeries: fsDeleteSeries }) => {
-                if (fsDeleteSeries) fsDeleteSeries(uid, seriesId).catch(console.error);
-            })
-            .catch(console.error);
+        fsDeleteSeries(uid, seriesId).catch(console.error);
     },
         }),
         {

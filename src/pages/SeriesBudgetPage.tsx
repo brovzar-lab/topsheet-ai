@@ -129,7 +129,7 @@ export function SeriesBudgetPage() {
         Consolidated episode budget rollup with amortized cost pool.
       </p>
 
-      {/* ── Series Topsheet Card ──────────────────────────── */}
+      {/* ── Series Topsheet Panel ──────────────────────────── */}
       <div className="bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg p-6 mb-6">
         <h3 className="text-lemon-text-primary mb-4">Series Topsheet</h3>
         <div className="space-y-2 font-mono text-sm">

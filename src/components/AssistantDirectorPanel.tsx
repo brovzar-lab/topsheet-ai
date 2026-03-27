@@ -750,7 +750,7 @@ export function AssistantDirectorPanel({
         } finally {
             setIsLoading(false);
         }
-    }, [input, apiKey, isLoading, messages, systemPrompt, sandraSystemPrompt, sandraMessages, executeCrossConsult]);
+    }, [input, apiKey, isLoading, messages, systemPrompt, sandraSystemPrompt, sandraMessages, executeCrossConsult, setMessagesStable]);
 
     const quickPrompts = getQuickPrompts(snapshot);
 

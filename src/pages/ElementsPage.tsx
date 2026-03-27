@@ -150,6 +150,7 @@ export function ElementsPage() {
                 <div className="relative flex-1 max-w-sm">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-lemon-gray-500" />
                     <input
+                        aria-label="Search elements"
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}

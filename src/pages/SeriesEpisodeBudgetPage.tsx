@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '@/stores/project-store';
 import { useBudgetStore } from '@/stores/budget-store';
@@ -40,7 +40,10 @@ export function SeriesEpisodeBudgetPage() {
   const { getDraftsForProject, addDraft } = useBudgetStore();
   const activeSeries = useSeriesStore(s => s.activeSeries);
 
-  const projectDrafts = projectId ? getDraftsForProject(projectId).sort((a, b) => b.version - a.version) : [];
+  const projectDrafts = useMemo(
+    () => projectId ? getDraftsForProject(projectId).sort((a, b) => b.version - a.version) : [],
+    [projectId, getDraftsForProject],
+  );
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(projectDrafts[0]?.id ?? null);
   const selectedDraft = projectDrafts.find(d => d.id === selectedDraftId) ?? projectDrafts[0];
   const [generating, setGenerating] = useState(false);

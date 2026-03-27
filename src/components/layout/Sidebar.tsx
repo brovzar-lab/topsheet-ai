@@ -254,6 +254,7 @@ function ProjectList({
                             {/* Delete button — visible on hover */}
                             <button
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(p.id, p.title, 'film'); }}
+                                aria-label="Delete project"
                                 title="Delete project"
                                 className="absolute right-2 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10"
                             >
@@ -297,6 +298,7 @@ function ProjectList({
                         {/* Delete button — visible on hover */}
                         <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(s.id, s.title, 'tv'); }}
+                            aria-label="Delete series"
                             title="Delete series"
                             className="absolute right-2 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10"
                         >
@@ -444,6 +446,7 @@ export function Sidebar() {
                 <button
                     data-testid="sidebar-settings-button"
                     onClick={handleSettingsClick}
+                    aria-label={isOnSettings ? 'Go back' : 'Settings'}
                     title={isOnSettings ? 'Go back' : 'Settings'}
                     className={`p-2 rounded transition-colors ${isOnSettings
                         ? 'text-lemon-cyan bg-lemon-cyan/10'

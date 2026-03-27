@@ -255,7 +255,7 @@ export function SeriesNewPage() {
       {/* Card: Pilot Designation */}
       <div className="bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg mb-8">
         <div className="px-6 py-3 border-b border-lemon-gray-700">
-          <h3 style={{ color: '#E8D500' }}>Pilot Episode</h3>
+          <h3 className="text-lemon-yellow">Pilot Episode</h3>
         </div>
         <div className="p-6 flex items-start justify-between gap-6">
           <div>

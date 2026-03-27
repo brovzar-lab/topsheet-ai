@@ -8,7 +8,7 @@ test.describe('Accessibility', () => {
       url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.9.1/axe.min.js',
     });
     const violations = await page.evaluate(async () => {
-      // @ts-ignore
+      // @ts-expect-error — axe is injected at runtime via addScriptTag
       const results = await window.axe.run();
       return results.violations.filter((v: { impact: string }) =>
         v.impact === 'critical' || v.impact === 'serious'

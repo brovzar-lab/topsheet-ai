@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { useSearchParamState } from '@/hooks/useSearchParamState';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { SeriesEpisodeBudgetPage } from './SeriesEpisodeBudgetPage';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
@@ -56,8 +57,8 @@ export function BudgetPage() {
         [projectId, getDraftsForProject],
     );
 
-    const [selectedDraftId, setSelectedDraftId] = useState<string | null>(
-        projectDrafts[0]?.id ?? null,
+    const [selectedDraftId, setSelectedDraftId] = useSearchParamState(
+        'draft', projectDrafts[0]?.id ?? null,
     );
     const [compareMode, setCompareMode] = useState(false);
     const [compareDraftId, setCompareDraftId] = useState<string | null>(null);
@@ -98,14 +99,14 @@ export function BudgetPage() {
 
         addDraft(draft);
         setSelectedDraftId(draft.id);
-    }, [projectId, breakdowns, projectDrafts, project, settings, schedule, addDraft]);
+    }, [projectId, breakdowns, projectDrafts, project, settings, schedule, addDraft, setSelectedDraftId]);
 
     const handleClone = useCallback(() => {
         if (!selectedDraft) return;
         const newDraft = cloneDraft(selectedDraft);
         addDraft(newDraft);
         setSelectedDraftId(newDraft.id);
-    }, [selectedDraft, addDraft]);
+    }, [selectedDraft, addDraft, setSelectedDraftId]);
 
     const handleExport = useCallback(async () => {
         if (!selectedDraft) return;

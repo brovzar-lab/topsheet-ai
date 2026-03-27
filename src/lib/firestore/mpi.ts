@@ -10,9 +10,7 @@
 import {
     collection,
     doc,
-    setDoc,
     getDocs,
-    deleteDoc,
     writeBatch,
     serverTimestamp,
 } from 'firebase/firestore';

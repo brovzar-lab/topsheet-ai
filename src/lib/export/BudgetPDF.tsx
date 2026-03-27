@@ -4,6 +4,7 @@
  * Generates a branded "Budget at a Glance" summary suitable for
  * producers, investors, and line-producer handoffs.
  */
+/* eslint-disable react-refresh/only-export-components */
 
 import {
     Document, Page, View, Text, StyleSheet, Font, pdf,
@@ -32,7 +33,7 @@ const COL = {
     white: '#FFFFFF',
     yellow: '#FFFF00',
     cyan: '#00E5C8',
-    purple: '#A78BFA',
+    emerald: '#34D399',
     slate: '#94A3B8',
     orange: '#FB923C',
     gray: '#333333',
@@ -43,7 +44,7 @@ const COL = {
 const SECTION_META: Record<BudgetSection, { label: string; color: string }> = {
     ATL: { label: 'Above the Line', color: COL.yellow },
     BTL: { label: 'Below the Line', color: COL.cyan },
-    POST: { label: 'Post-Production', color: COL.purple },
+    POST: { label: 'Post-Production', color: COL.emerald },
     GENERAL: { label: 'General Expenses', color: COL.slate },
     ADMIN: { label: 'Admin / Other', color: COL.orange },
 };
