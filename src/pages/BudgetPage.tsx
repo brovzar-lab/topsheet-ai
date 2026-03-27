@@ -4,13 +4,13 @@
  * Layout: Topsheet summary + line-item table + draft management.
  */
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { SeriesEpisodeBudgetPage } from './SeriesEpisodeBudgetPage';
 import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DollarSign, Zap, Copy, GitCompare, FileText,
-    ChevronDown, ChevronUp, Download, CalendarDays, Eye, Loader2, Bot,
+    Download, CalendarDays, Eye, Loader2, Bot,
 } from 'lucide-react';
 import { exportBudgetExcel } from '@/lib/export/budget-excel';
 import { exportBudgetPDF, generateBudgetPDFBlob } from '@/lib/export/BudgetPDF';
@@ -19,36 +19,20 @@ import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { formatMXN, formatMXNShort, calcSectionTotals, getSection, fromCentavos, toCentavos } from '@/lib/budget/calculator';
+import { formatMXN } from '@/lib/budget/calculator';
 import { generateAutoBudget } from '@/lib/budget/auto-budget';
 import { cloneDraft, compareDrafts } from '@/lib/budget/draft-manager';
 import type { DraftComparison } from '@/lib/budget/draft-manager';
-import { calculateEFICINE } from '@/lib/budget/eficine';
-import type { BudgetDraft, BudgetSection } from '@/types';
+import type { BudgetSection } from '@/types';
 import { LineProducerPanel } from '@/components/LineProducerPanel';
 import type { ProjectSnapshot } from '@/components/LineProducerPanel';
 import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
-
-// -----------------------------------------------------------------------
-// Section colors
-// -----------------------------------------------------------------------
-
-const SECTION_COLORS: Record<BudgetSection, string> = {
-    ATL: '#FFFF00',     // Signal Yellow
-    BTL: '#00E5C8',     // Electric Cyan
-    POST: '#A78BFA',    // Purple
-    GENERAL: '#94A3B8', // Slate
-    ADMIN: '#FB923C',   // Orange
-};
-
-const SECTION_LABELS: Record<BudgetSection, string> = {
-    ATL: 'Above the Line',
-    BTL: 'Below the Line',
-    POST: 'Post-Production',
-    GENERAL: 'General',
-    ADMIN: 'Admin',
-};
+import { Topsheet } from '@/components/budget/Topsheet';
+import { LineItemTable } from '@/components/budget/LineItemTable';
+import { BulkOperationsBar } from '@/components/budget/BulkOperationsBar';
+import { EFICINEPanel } from '@/components/budget/EFICINEPanel';
+import { TierComparison } from '@/components/budget/TierComparison';
 
 // -----------------------------------------------------------------------
 // Main component
@@ -64,12 +48,12 @@ export function BudgetPage() {
     const isLoadingProjects = useProjectStore((s) => s.isLoadingProjects);
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
-    const { drafts, addDraft, getDraftsForProject } = useBudgetStore();
+    const { addDraft, getDraftsForProject } = useBudgetStore();
     const settings = useSettingsStore();
 
     const projectDrafts = useMemo(
         () => getDraftsForProject(projectId ?? '').sort((a, b) => b.version - a.version),
-        [drafts, projectId, getDraftsForProject],
+        [projectId, getDraftsForProject],
     );
 
     const [selectedDraftId, setSelectedDraftId] = useState<string | null>(
@@ -82,27 +66,15 @@ export function BudgetPage() {
     );
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
-    const selectedDraft = projectDrafts.find((d) => d.id === selectedDraftId) ?? projectDrafts[0];
-    const compareDraft = projectDrafts.find((d) => d.id === compareDraftId);
-
-    // TV episode fork — delegate to focused TV budget page
-    if (tvSeriesId && tvEpisodeId) {
-        return <SeriesEpisodeBudgetPage />;
-    }
-
     // Agent panel state
     const [lpOpen, setLpOpen] = useState(true);
     const [adPanelOpen, setAdPanelOpen] = useState(false);
     const [brainstormOpen, setBrainstormOpen] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
 
-    // Snapshot for Sandra — she owns the budget on feature film
-    const lpSnapshot: ProjectSnapshot = {
-        projectId: projectId ?? '',
-        scenes: [],
-        breakdowns,
-        activeSceneNumber: null,
-        budget: projectDrafts[0] ?? null,
-    };
+    const selectedDraft = projectDrafts.find((d) => d.id === selectedDraftId) ?? projectDrafts[0];
+    const compareDraft = projectDrafts.find((d) => d.id === compareDraftId);
 
     // ---------------------------------------------------------------
     // Actions
@@ -126,7 +98,7 @@ export function BudgetPage() {
 
         addDraft(draft);
         setSelectedDraftId(draft.id);
-    }, [projectId, breakdowns, project, settings, schedule, addDraft]);
+    }, [projectId, breakdowns, projectDrafts, project, settings, schedule, addDraft]);
 
     const handleClone = useCallback(() => {
         if (!selectedDraft) return;
@@ -135,7 +107,6 @@ export function BudgetPage() {
         setSelectedDraftId(newDraft.id);
     }, [selectedDraft, addDraft]);
 
-    const [exporting, setExporting] = useState(false);
     const handleExport = useCallback(async () => {
         if (!selectedDraft) return;
         setExporting(true);
@@ -150,7 +121,6 @@ export function BudgetPage() {
         }
     }, [selectedDraft, breakdowns, project, projectId]);
 
-    const [exportingPdf, setExportingPdf] = useState(false);
     const handleExportPdf = useCallback(async () => {
         if (!selectedDraft) return;
         setExportingPdf(true);
@@ -180,6 +150,20 @@ export function BudgetPage() {
         }
         return null;
     }, [compareMode, selectedDraft, compareDraft]);
+
+    // TV episode fork — delegate to focused TV budget page
+    if (tvSeriesId && tvEpisodeId) {
+        return <SeriesEpisodeBudgetPage />;
+    }
+
+    // Snapshot for Sandra — she owns the budget on feature film
+    const lpSnapshot: ProjectSnapshot = {
+        projectId: projectId ?? '',
+        scenes: [],
+        breakdowns,
+        activeSceneNumber: null,
+        budget: projectDrafts[0] ?? null,
+    };
 
     // ---------------------------------------------------------------
     // Guards
@@ -263,6 +247,7 @@ export function BudgetPage() {
             {/* Actions */}
             <div className="mb-6 flex flex-wrap items-center gap-3">
                 <button
+                    data-testid="auto-budget-button"
                     onClick={handleGenerate}
                     disabled={!hasBreakdowns}
                     className="flex items-center gap-2 px-5 py-2.5 bg-lemon-cyan text-lemon-black font-display font-bold uppercase text-sm rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -291,6 +276,7 @@ export function BudgetPage() {
                 {selectedDraft && (
                     <>
                         <button
+                            data-testid="new-draft-button"
                             onClick={handleClone}
                             className="flex items-center gap-2 px-4 py-2.5 border border-lemon-gray-700 text-lemon-text-body font-display font-bold uppercase text-sm rounded hover:border-lemon-cyan hover:text-lemon-cyan transition-colors"
                         >
@@ -308,6 +294,7 @@ export function BudgetPage() {
                             Compare
                         </button>
                         <button
+                            data-testid="export-excel-button"
                             onClick={handleExport}
                             disabled={exporting}
                             className="flex items-center gap-2 px-4 py-2.5 border border-lemon-gray-700 text-lemon-text-body font-display font-bold uppercase text-sm rounded hover:border-lemon-yellow hover:text-lemon-yellow transition-colors disabled:opacity-40 disabled:cursor-wait"
@@ -316,6 +303,7 @@ export function BudgetPage() {
                             {exporting ? 'Exporting…' : '↓ Excel'}
                         </button>
                         <button
+                            data-testid="export-pdf-button"
                             onClick={handleExportPdf}
                             disabled={exportingPdf}
                             className="flex items-center gap-2 px-4 py-2.5 border border-lemon-gray-700 text-lemon-text-body font-display font-bold uppercase text-sm rounded hover:border-lemon-yellow hover:text-lemon-yellow transition-colors disabled:opacity-40 disabled:cursor-wait"
@@ -487,707 +475,3 @@ export function BudgetPage() {
     );
 }
 
-// -----------------------------------------------------------------------
-// Topsheet
-// -----------------------------------------------------------------------
-
-function Topsheet({ draft }: { draft: BudgetDraft }) {
-    const sections = calcSectionTotals(draft.lineItems);
-    const maxSection = Math.max(sections.ATL, sections.BTL, sections.POST, sections.GENERAL, sections.ADMIN, 1);
-
-    return (
-        <div className="mb-6 p-5 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg">
-            <div className="flex items-center justify-between mb-4">
-                <span className="lemon-label">TOPSHEET — v{draft.version}</span>
-                <span className="text-xs text-lemon-text-muted font-mono">
-                    {new Date(draft.createdAt).toLocaleDateString()}
-                </span>
-            </div>
-
-            {/* Section bars */}
-            <div className="space-y-3 mb-4">
-                {(['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'] as BudgetSection[]).map((section) => {
-                    const amount = sections[section];
-                    if (amount === 0) return null;
-                    const pct = (amount / maxSection) * 100;
-
-                    return (
-                        <div key={section} className="flex items-center gap-3">
-                            <span className="w-20 text-xs font-mono text-lemon-text-muted text-right">
-                                {section}
-                            </span>
-                            <div className="flex-1 h-5 bg-lemon-gray-800 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{
-                                        width: `${pct}%`,
-                                        backgroundColor: SECTION_COLORS[section],
-                                        opacity: 0.7,
-                                    }}
-                                />
-                            </div>
-                            <span className="w-28 text-right font-mono text-sm text-lemon-text-primary">
-                                {formatMXNShort(amount)}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Totals row */}
-            <div className="border-t border-lemon-gray-700 pt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                    <span className="lemon-label block mb-0.5">SUBTOTAL</span>
-                    <span className="font-mono text-sm text-lemon-text-primary">
-                        {formatMXN(sections.total, true)}
-                    </span>
-                </div>
-                <div>
-                    <span className="lemon-label block mb-0.5">
-                        CONTINGENCY {draft.contingencyPercent}%
-                    </span>
-                    <span className="font-mono text-sm text-lemon-text-primary">
-                        {formatMXN(draft.contingencyCentavos, true)}
-                    </span>
-                </div>
-                <div>
-                    <span className="lemon-label block mb-0.5">EXCHANGE RATE</span>
-                    <span className="font-mono text-sm text-lemon-text-primary">
-                        {draft.exchangeRate} MXN/USD
-                    </span>
-                </div>
-                <div className="bg-lemon-yellow/10 rounded px-3 py-1 -my-1">
-                    <span className="lemon-label block mb-0.5 text-lemon-yellow">GRAND TOTAL</span>
-                    <span className="font-display font-black text-lg text-lemon-yellow">
-                        {formatMXN(draft.totalCentavos, true)}
-                    </span>
-                </div>
-            </div>
-
-            {/* Notes */}
-            {draft.notes && (
-                <p className="mt-3 text-xs text-lemon-text-muted italic">{draft.notes}</p>
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Line Item Table
-// -----------------------------------------------------------------------
-
-function LineItemTable({
-    draft,
-    expandedSections,
-    onToggleSection,
-    comparison,
-    onUpdateItem,
-}: {
-    draft: BudgetDraft;
-    expandedSections: Set<BudgetSection>;
-    onToggleSection: (s: BudgetSection) => void;
-    comparison: DraftComparison | null;
-    onUpdateItem?: (lineId: string, field: 'rateCentavos' | 'quantity' | 'duration' | 'description', value: number | string) => void;
-}) {
-    const sections: BudgetSection[] = ['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'];
-
-    return (
-        <div className="space-y-2">
-            {sections.map((section) => {
-                const sectionItems = draft.lineItems.filter(
-                    (item) => getSection(item.categoryCode) === section,
-                );
-                if (sectionItems.length === 0) return null;
-
-                const isExpanded = expandedSections.has(section);
-                const sectionTotal = sectionItems.reduce((sum, i) => sum + i.subtotalCentavos, 0);
-
-                return (
-                    <div key={section} className="border border-lemon-gray-700 rounded-lg overflow-hidden">
-                        {/* Section header */}
-                        <button
-                            onClick={() => onToggleSection(section)}
-                            className="w-full flex items-center gap-3 px-4 py-3 bg-lemon-bg-secondary hover:bg-lemon-bg-elevated/50 transition-colors"
-                        >
-                            <div
-                                className="w-3 h-3 rounded-full"
-                                style={{ backgroundColor: SECTION_COLORS[section] }}
-                            />
-                            <span className="font-display font-bold uppercase text-sm text-lemon-text-primary">
-                                {section} — {SECTION_LABELS[section]}
-                            </span>
-                            <span className="ml-auto font-mono text-sm text-lemon-text-muted">
-                                {sectionItems.length} items
-                            </span>
-                            <span className="font-mono text-sm font-bold" style={{ color: SECTION_COLORS[section] }}>
-                                {formatMXN(sectionTotal, true)}
-                            </span>
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-
-                        {/* Items */}
-                        {isExpanded && (
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-t border-lemon-gray-800 text-left">
-                                        <th className="px-4 py-2 lemon-label w-16">CODE</th>
-                                        <th className="px-2 py-2 lemon-label">DESCRIPTION</th>
-                                        <th className="px-2 py-2 lemon-label text-right w-20">UNIT</th>
-                                        <th className="px-2 py-2 lemon-label text-right w-24">RATE</th>
-                                        <th className="px-2 py-2 lemon-label text-right w-12">QTY</th>
-                                        <th className="px-2 py-2 lemon-label text-right w-12">DUR</th>
-                                        <th className="px-4 py-2 lemon-label text-right w-28">SUBTOTAL</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sectionItems.map((item) => {
-                                        const diffItem = comparison?.items.find(
-                                            (d) => d.categoryCode === item.categoryCode && d.description === item.description,
-                                        );
-                                        const diffClass = diffItem
-                                            ? diffItem.deltaCentavos > 0 ? 'bg-lemon-coral/5' :
-                                                diffItem.deltaCentavos < 0 ? 'bg-lemon-cyan/5' : ''
-                                            : '';
-
-                                        return (
-                                            <tr
-                                                key={item.id}
-                                                className={`border-t border-lemon-gray-800 hover:bg-lemon-bg-elevated/30 ${diffClass}`}
-                                            >
-                                                <td className="px-4 py-2 font-mono text-xs text-lemon-text-muted">
-                                                    {item.categoryCode}
-                                                </td>
-                                                <td className="px-2 py-2 text-lemon-text-primary truncate max-w-xs">
-                                                    {item.description}
-                                                    {item.isOverridden && (
-                                                        <span className="ml-1 text-[0.6rem] text-lemon-yellow">★</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-2 py-2 text-right font-mono text-xs text-lemon-text-muted">
-                                                    {item.unit}
-                                                </td>
-                                                <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {onUpdateItem ? (
-                                                        <EditableCell
-                                                            value={fromCentavos(item.rateCentavos)}
-                                                            onCommit={(v) => onUpdateItem(item.id, 'rateCentavos', toCentavos(v))}
-                                                            format={(v) => formatMXN(toCentavos(v), true)}
-                                                        />
-                                                    ) : formatMXN(item.rateCentavos, true)}
-                                                </td>
-                                                <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {onUpdateItem ? (
-                                                        <EditableCell
-                                                            value={item.quantity}
-                                                            onCommit={(v) => onUpdateItem(item.id, 'quantity', Math.max(1, Math.round(v)))}
-                                                            format={(v) => String(Math.round(v))}
-                                                            integer
-                                                        />
-                                                    ) : item.quantity}
-                                                </td>
-                                                <td className="px-2 py-2 text-right font-mono text-lemon-text-body">
-                                                    {onUpdateItem ? (
-                                                        <EditableCell
-                                                            value={item.duration}
-                                                            onCommit={(v) => onUpdateItem(item.id, 'duration', Math.max(1, Math.round(v)))}
-                                                            format={(v) => String(Math.round(v))}
-                                                            integer
-                                                        />
-                                                    ) : item.duration}
-                                                </td>
-                                                <td className="px-4 py-2 text-right font-mono font-bold text-lemon-text-primary">
-                                                    {formatMXN(item.subtotalCentavos, true)}
-                                                    {diffItem && diffItem.deltaCentavos !== 0 && (
-                                                        <span className={`block text-[0.6rem] ${diffItem.deltaCentavos > 0 ? 'text-lemon-coral' : 'text-lemon-cyan'
-                                                            }`}>
-                                                            {diffItem.deltaCentavos > 0 ? '+' : ''}
-                                                            {formatMXN(diffItem.deltaCentavos, true)}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                                {/* Section subtotal row */}
-                                <tfoot>
-                                    <tr className="border-t-2 border-lemon-gray-600">
-                                        <td colSpan={6} className="px-4 py-2 text-right font-display font-bold text-xs uppercase text-lemon-text-muted">
-                                            {SECTION_LABELS[section]} Subtotal
-                                        </td>
-                                        <td className="px-4 py-2 text-right font-mono font-bold text-sm" style={{ color: SECTION_COLORS[section] }}>
-                                            {formatMXN(sectionTotal, true)}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        )}
-                    </div>
-                );
-            })}
-
-            {/* Grand Total Footer */}
-            {(() => {
-                const sectionTotals = calcSectionTotals(draft.lineItems);
-                return (
-                    <div className="mt-4 p-4 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg">
-                        <div className="space-y-1.5 mb-3">
-                            {(['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'] as BudgetSection[]).map((s) => {
-                                const amt = sectionTotals[s];
-                                if (amt === 0) return null;
-                                return (
-                                    <div key={s} className="flex items-center justify-between text-xs font-mono">
-                                        <span className="text-lemon-text-muted">{SECTION_LABELS[s]}</span>
-                                        <span style={{ color: SECTION_COLORS[s] }}>{formatMXN(amt, true)}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        <div className="border-t border-lemon-gray-600 pt-2 flex items-center justify-between">
-                            <span className="font-display font-bold text-sm text-lemon-text-muted uppercase">Subtotal</span>
-                            <span className="font-mono font-bold text-sm text-lemon-text-primary">{formatMXN(sectionTotals.total, true)}</span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                            <span className="font-display font-bold text-sm text-lemon-text-muted uppercase">Contingency {draft.contingencyPercent}%</span>
-                            <span className="font-mono font-bold text-sm text-lemon-text-primary">{formatMXN(draft.contingencyCentavos, true)}</span>
-                        </div>
-                        <div className="border-t border-lemon-yellow/30 mt-2 pt-2 flex items-center justify-between bg-lemon-yellow/5 rounded px-3 py-2 -mx-1">
-                            <span className="font-display font-black text-sm text-lemon-yellow uppercase">Grand Total</span>
-                            <span className="font-display font-black text-lg text-lemon-yellow">{formatMXN(draft.totalCentavos, true)}</span>
-                        </div>
-                    </div>
-                );
-            })()}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Tier Comparison Component
-// -----------------------------------------------------------------------
-
-function TierComparison({
-    breakdowns,
-    projectId,
-    totalPages,
-    contingencyPercent,
-    exchangeRate,
-    schedule,
-}: {
-    breakdowns: Record<string, import('@/types').SceneBreakdown>;
-    projectId: string;
-    totalPages: number;
-    contingencyPercent: number;
-    exchangeRate: number;
-    schedule?: import('@/types').ScheduleDraft;
-}) {
-    const [open, setOpen] = useState(false);
-    const [tierDrafts, setTierDrafts] = useState<{
-        low: BudgetDraft | null;
-        mid: BudgetDraft | null;
-        premium: BudgetDraft | null;
-    }>({ low: null, mid: null, premium: null });
-
-    const handleGenerate = () => {
-        // Generate three drafts with tier-appropriate rate multipliers
-        // Low: 60% of MPI rates, Mid: 100%, Premium: 180%
-        const baseDraft = generateAutoBudget(breakdowns, {
-            projectId,
-            totalPages,
-            contingencyPercent,
-            exchangeRate,
-            scheduleData: schedule,
-        });
-
-        const scaleDraft = (draft: BudgetDraft, factor: number, tierName: string): BudgetDraft => {
-            const scaledItems = draft.lineItems.map((item) => ({
-                ...item,
-                rateCentavos: Math.round(item.rateCentavos * factor),
-                subtotalCentavos: Math.round(item.subtotalCentavos * factor),
-            }));
-            const total = scaledItems.reduce((sum, i) => sum + i.subtotalCentavos, 0);
-            const contingency = Math.round(total * contingencyPercent / 100);
-            const sectionTotals = calcSectionTotals(scaledItems);
-            return {
-                ...draft,
-                id: `${draft.id}_${tierName}`,
-                name: `${tierName.toUpperCase()} Tier`,
-                lineItems: scaledItems,
-                totalCentavos: total + contingency,
-                atlCentavos: sectionTotals.ATL,
-                btlCentavos: sectionTotals.BTL,
-                postCentavos: sectionTotals.POST,
-                contingencyCentavos: contingency,
-            };
-        };
-
-        setTierDrafts({
-            low: scaleDraft(baseDraft, 0.6, 'low'),
-            mid: scaleDraft(baseDraft, 1.0, 'mid'),
-            premium: scaleDraft(baseDraft, 1.8, 'premium'),
-        });
-        setOpen(true);
-    };
-
-    const tiers = [
-        { key: 'low' as const, label: 'LOW', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30' },
-        { key: 'mid' as const, label: 'MID', color: 'text-lemon-cyan', bg: 'bg-lemon-cyan/10', border: 'border-lemon-cyan/30' },
-        { key: 'premium' as const, label: 'PREMIUM', color: 'text-lemon-yellow', bg: 'bg-lemon-yellow/10', border: 'border-lemon-yellow/30' },
-    ];
-
-    return (
-        <div className="mt-8 border-t border-lemon-gray-700 pt-6">
-            <div className="flex items-center justify-between mb-4">
-                <div>
-                    <h3 className="text-lemon-text-primary font-display font-bold">Tier Comparison</h3>
-                    <p className="text-xs text-lemon-text-muted">Side-by-side Low / Mid / Premium budget estimates</p>
-                </div>
-                <button
-                    onClick={handleGenerate}
-                    className="flex items-center gap-2 px-4 py-2 bg-lemon-yellow/10 border border-lemon-yellow/30 text-lemon-yellow font-display font-bold uppercase text-xs rounded hover:bg-lemon-yellow/20 transition-colors"
-                >
-                    <GitCompare size={14} />
-                    {tierDrafts.mid ? 'Regenerate' : 'Compare Tiers'}
-                </button>
-            </div>
-
-            {open && tierDrafts.mid && (
-                <div className="grid grid-cols-3 gap-3">
-                    {tiers.map(({ key, label, color, bg, border }) => {
-                        const draft = tierDrafts[key];
-                        if (!draft) return null;
-
-                        const midTotal = tierDrafts.mid!.totalCentavos;
-                        const pctDiff = key === 'mid' ? 0 : Math.round(((draft.totalCentavos - midTotal) / midTotal) * 100);
-
-                        return (
-                            <div key={key} className={`p-4 rounded-lg border ${border} ${bg}`}>
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className={`font-display font-black text-sm ${color} tracking-wider`}>{label}</span>
-                                    {pctDiff !== 0 && (
-                                        <span className={`font-mono text-[0.6rem] ${pctDiff < 0 ? 'text-green-400' : 'text-lemon-coral'}`}>
-                                            {pctDiff > 0 ? '+' : ''}{pctDiff}%
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Section breakdown */}
-                                <div className="space-y-1 mb-3">
-                                    {(['ATL', 'BTL', 'POST', 'GENERAL', 'ADMIN'] as BudgetSection[]).map((section) => {
-                                        const sectionTotal = draft.lineItems
-                                            .filter((li) => getSection(li.categoryCode) === section)
-                                            .reduce((s, li) => s + li.subtotalCentavos, 0);
-                                        if (sectionTotal === 0) return null;
-                                        return (
-                                            <div key={section} className="flex items-center justify-between">
-                                                <span className="font-mono text-[0.6rem] text-lemon-text-muted">{section}</span>
-                                                <span className="font-mono text-[0.6rem] text-lemon-text-body">{formatMXNShort(sectionTotal)}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <span className="font-mono text-[0.6rem] text-lemon-text-muted">+{draft.contingencyPercent}%</span>
-                                    <span className="font-mono text-[0.6rem] text-lemon-text-muted">{formatMXNShort(draft.contingencyCentavos)}</span>
-                                </div>
-
-                                {/* Grand total */}
-                                <div className={`mt-2 pt-2 border-t ${border}`}>
-                                    <div className="flex items-center justify-between">
-                                        <span className={`font-display font-black text-xs ${color}`}>TOTAL</span>
-                                        <span className={`font-display font-black text-sm ${color}`}>{formatMXN(draft.totalCentavos, true)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Bulk Operations Bar
-// -----------------------------------------------------------------------
-
-function BulkOperationsBar({ draft }: { draft: BudgetDraft }) {
-    const { bulkScaleLines, bulkDeleteLines, bulkDuplicateLines } = useBudgetStore();
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [scaleFactor, setScaleFactor] = useState('1.1');
-    const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-    const [open, setOpen] = useState(false);
-
-    const toggleLine = (id: string) => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
-
-    const selectAll = () => setSelectedIds(new Set(draft.lineItems.map((li) => li.id)));
-    const selectNone = () => { setSelectedIds(new Set()); setShowConfirmDelete(false); };
-
-    return (
-        <div className="mt-6 border border-lemon-gray-700 rounded-lg overflow-hidden">
-            <button
-                onClick={() => setOpen(!open)}
-                className="w-full px-4 py-2.5 bg-lemon-bg-secondary flex items-center justify-between hover:bg-lemon-bg-elevated transition-colors"
-            >
-                <div className="flex items-center gap-2">
-                    <Copy size={14} className="text-lemon-yellow" />
-                    <span className="font-display font-bold text-xs text-lemon-text-primary uppercase">Bulk Operations</span>
-                    <span className="text-[0.6rem] text-lemon-text-muted font-mono">{draft.lineItems.length} lines</span>
-                </div>
-                {open ? <ChevronUp size={14} className="text-lemon-text-muted" /> : <ChevronDown size={14} className="text-lemon-text-muted" />}
-            </button>
-
-            {open && (
-                <>
-                    {/* Select bar */}
-                    <div className="px-4 py-1.5 bg-lemon-bg-secondary/50 border-y border-lemon-gray-700 flex items-center gap-3">
-                        <span className="text-[0.6rem] text-lemon-text-muted font-mono">{selectedIds.size} selected</span>
-                        <button onClick={selectAll} className="text-[0.6rem] font-mono text-lemon-cyan hover:underline">All</button>
-                        <button onClick={selectNone} className="text-[0.6rem] font-mono text-lemon-text-muted hover:underline">None</button>
-                    </div>
-
-                    {/* Line list */}
-                    <div className="max-h-48 overflow-y-auto divide-y divide-lemon-gray-800">
-                        {draft.lineItems.map((li) => (
-                            <label key={li.id} className="flex items-center gap-3 px-4 py-1.5 hover:bg-lemon-bg-elevated/30 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedIds.has(li.id)}
-                                    onChange={() => toggleLine(li.id)}
-                                    className="accent-lemon-cyan"
-                                />
-                                <span className="font-mono text-[0.55rem] text-lemon-text-muted w-10">{li.categoryCode}</span>
-                                <span className="text-xs text-lemon-text-body flex-1 truncate">{li.description}</span>
-                                <span className="font-mono text-[0.6rem] text-lemon-text-muted">{formatMXNShort(li.subtotalCentavos)}</span>
-                            </label>
-                        ))}
-                    </div>
-
-                    {/* Action bar */}
-                    {selectedIds.size > 0 && (
-                        <div className="px-4 py-2 bg-lemon-bg-secondary/50 border-t border-lemon-gray-700 flex items-center gap-3 flex-wrap">
-                            {/* Scale */}
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-[0.6rem] font-mono text-lemon-text-muted">×</span>
-                                <input
-                                    type="number" step="0.1" min="0.1" max="5"
-                                    value={scaleFactor}
-                                    onChange={(e) => setScaleFactor(e.target.value)}
-                                    className="w-14 px-1.5 py-1 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary font-mono text-center focus:border-lemon-cyan focus:outline-none"
-                                />
-                                <button
-                                    onClick={() => { bulkScaleLines(draft.id, [...selectedIds], parseFloat(scaleFactor) || 1); selectNone(); }}
-                                    className="px-2 py-1 bg-lemon-cyan/10 border border-lemon-cyan/30 text-lemon-cyan font-mono text-[0.6rem] font-bold rounded hover:bg-lemon-cyan/20 transition-colors"
-                                >
-                                    Scale
-                                </button>
-                            </div>
-
-                            {/* Duplicate */}
-                            <button
-                                onClick={() => { bulkDuplicateLines(draft.id, [...selectedIds]); selectNone(); }}
-                                className="px-2 py-1 bg-lemon-yellow/10 border border-lemon-yellow/30 text-lemon-yellow font-mono text-[0.6rem] font-bold rounded hover:bg-lemon-yellow/20 transition-colors"
-                            >
-                                Duplicate ({selectedIds.size})
-                            </button>
-
-                            {/* Delete */}
-                            {showConfirmDelete ? (
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[0.6rem] text-lemon-coral font-mono">Delete {selectedIds.size}?</span>
-                                    <button
-                                        onClick={() => { bulkDeleteLines(draft.id, [...selectedIds]); selectNone(); }}
-                                        className="px-2 py-0.5 bg-lemon-coral text-lemon-black font-mono text-[0.6rem] font-bold rounded"
-                                    >YES</button>
-                                    <button
-                                        onClick={() => setShowConfirmDelete(false)}
-                                        className="px-2 py-0.5 border border-lemon-gray-600 text-lemon-text-muted font-mono text-[0.6rem] rounded"
-                                    >NO</button>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={() => setShowConfirmDelete(true)}
-                                    className="px-2 py-1 bg-lemon-coral/10 border border-lemon-coral/30 text-lemon-coral font-mono text-[0.6rem] font-bold rounded hover:bg-lemon-coral/20 transition-colors"
-                                >
-                                    Delete ({selectedIds.size})
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// EFICINE Tax Incentive Panel
-// -----------------------------------------------------------------------
-
-function EFICINEPanel({ draft }: { draft: BudgetDraft }) {
-    const [open, setOpen] = useState(false);
-    const result = useMemo(() => calculateEFICINE(draft), [draft]);
-
-    return (
-        <div className="mt-6 border border-lemon-gray-700 rounded-lg overflow-hidden">
-            <button
-                onClick={() => setOpen(!open)}
-                className="w-full px-4 py-3 bg-lemon-bg-secondary flex items-center justify-between hover:bg-lemon-bg-elevated transition-colors"
-            >
-                <div className="flex items-center gap-2">
-                    <span className="text-lg">🇲🇽</span>
-                    <span className="font-display font-bold text-sm text-lemon-text-primary">EFICINE Tax Incentive</span>
-                    <span className="text-[0.6rem] text-lemon-text-muted font-mono">Art. 189 LISR</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <span className="font-display font-black text-sm text-green-400">
-                        Credit: {formatMXN(result.creditCentavos, true)}
-                    </span>
-                    {open ? <ChevronUp size={14} className="text-lemon-text-muted" /> : <ChevronDown size={14} className="text-lemon-text-muted" />}
-                </div>
-            </button>
-
-            {open && (
-                <div className="px-4 py-4 space-y-4">
-                    {/* Summary */}
-                    <div className="grid grid-cols-4 gap-3">
-                        {[
-                            { label: 'Total Budget', value: formatMXN(result.totalBudgetCentavos, true), color: 'text-lemon-text-primary' },
-                            { label: 'Eligible Expenses', value: formatMXN(result.eligibleExpensesCentavos, true), color: 'text-lemon-cyan' },
-                            { label: 'Eligible %', value: `${result.eligiblePercent}%`, color: 'text-lemon-yellow' },
-                            { label: 'Tax Credit', value: formatMXN(result.creditCentavos, true), color: 'text-green-400' },
-                        ].map((stat) => (
-                            <div key={stat.label} className="p-3 bg-lemon-bg-secondary rounded-lg">
-                                <p className="text-[0.55rem] font-mono text-lemon-text-muted uppercase tracking-wider mb-1">{stat.label}</p>
-                                <p className={`font-display font-bold text-sm ${stat.color}`}>{stat.value}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    {result.wasCapped && (
-                        <div className="px-3 py-2 bg-lemon-yellow/10 border border-lemon-yellow/30 rounded text-xs text-lemon-yellow font-mono">
-                            ⚠ Credit capped at $20,000,000 MXN per project (EFICINE maximum)
-                        </div>
-                    )}
-
-                    {/* Section breakdown */}
-                    <div>
-                        <h4 className="font-mono text-[0.6rem] text-lemon-text-muted uppercase tracking-wider mb-2">Eligibility by Section</h4>
-                        <div className="space-y-1.5">
-                            {result.sectionBreakdown.map(({ section, eligibleCentavos, totalCentavos }) => {
-                                const pct = totalCentavos > 0 ? Math.round((eligibleCentavos / totalCentavos) * 100) : 0;
-                                return (
-                                    <div key={section} className="flex items-center gap-3">
-                                        <span className="font-mono text-[0.6rem] text-lemon-text-muted w-16">{section}</span>
-                                        <div className="flex-1 h-2 bg-lemon-gray-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-green-400/70 rounded-full" style={{ width: `${pct}%` }} />
-                                        </div>
-                                        <span className="font-mono text-[0.55rem] text-lemon-text-body w-10 text-right">{pct}%</span>
-                                        <span className="font-mono text-[0.55rem] text-green-400 w-24 text-right">{formatMXNShort(eligibleCentavos)}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Ineligible items */}
-                    {result.ineligibleItems.length > 0 && (
-                        <div>
-                            <h4 className="font-mono text-[0.6rem] text-lemon-text-muted uppercase tracking-wider mb-2">
-                                Ineligible Items ({result.ineligibleItems.length})
-                            </h4>
-                            <div className="max-h-32 overflow-y-auto space-y-0.5">
-                                {result.ineligibleItems.map((item, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-[0.55rem] font-mono">
-                                        <span className="text-lemon-coral">✕</span>
-                                        <span className="text-lemon-text-muted w-10">{item.categoryCode}</span>
-                                        <span className="text-lemon-text-body flex-1 truncate">{item.description}</span>
-                                        <span className="text-lemon-text-muted">{formatMXNShort(item.amountCentavos)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <p className="text-[0.5rem] text-lemon-text-muted font-mono italic">
-                        Estimate only. Consult SAT and a qualified fiscal advisor for EFICINE certification requirements.
-                    </p>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// EditableCell — inline editing for numeric budget fields
-// -----------------------------------------------------------------------
-
-function EditableCell({
-    value,
-    onCommit,
-    format,
-    integer,
-}: {
-    value: number;
-    onCommit: (v: number) => void;
-    format?: (v: number) => string;
-    integer?: boolean;
-}) {
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(String(value));
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (editing && inputRef.current) {
-            inputRef.current.focus();
-            inputRef.current.select();
-        }
-    }, [editing]);
-
-    const commitValue = () => {
-        const parsed = integer ? parseInt(draft, 10) : parseFloat(draft);
-        if (!isNaN(parsed) && parsed !== value) {
-            onCommit(parsed);
-        }
-        setEditing(false);
-    };
-
-    if (editing) {
-        return (
-            <input
-                ref={inputRef}
-                type="number"
-                step={integer ? '1' : '0.01'}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commitValue}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitValue();
-                    if (e.key === 'Escape') setEditing(false);
-                }}
-                className="w-full bg-lemon-bg-tertiary border border-lemon-cyan/50 rounded px-1.5 py-0.5 text-right font-mono text-sm text-lemon-text-primary focus:outline-none focus:border-lemon-cyan"
-            />
-        );
-    }
-
-    return (
-        <span
-            onDoubleClick={() => {
-                setDraft(String(value));
-                setEditing(true);
-            }}
-            className="cursor-pointer hover:text-lemon-cyan hover:underline hover:underline-offset-2 transition-colors"
-            title="Double-click to edit"
-        >
-            {format ? format(value) : String(value)}
-        </span>
-    );
-}
