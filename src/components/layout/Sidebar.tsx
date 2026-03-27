@@ -81,9 +81,10 @@ function DeleteModal({
 
 function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSuffix: string }) {
     return (
-        <div className="mt-6 border-t border-lemon-gray-700 pt-4">
+        <div className="mt-6 border-t border-lemon-gray-700 pt-4" role="group" aria-label="Project pages">
             <span className="lemon-label block px-4 mb-3 text-lemon-cyan">PROJECT</span>
             <NavLink
+                data-testid="nav-script"
                 to={`/project/${projectId}${episodeSuffix}`}
                 end
                 className={({ isActive }) =>
@@ -97,6 +98,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">SCRIPT</span>
             </NavLink>
             <NavLink
+                data-testid="nav-breakdown"
                 to={`/project/${projectId}/breakdown${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -109,6 +111,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">BREAKDOWN</span>
             </NavLink>
             <NavLink
+                data-testid="nav-schedule"
                 to={`/project/${projectId}/schedule${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -121,6 +124,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">SCHEDULE</span>
             </NavLink>
             <NavLink
+                data-testid="nav-budget"
                 to={`/project/${projectId}/budget${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -133,6 +137,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">BUDGET</span>
             </NavLink>
             <NavLink
+                data-testid="nav-doods"
                 to={`/project/${projectId}/doods${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -145,6 +150,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">DOODs</span>
             </NavLink>
             <NavLink
+                data-testid="nav-elements"
                 to={`/project/${projectId}/elements${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -157,6 +163,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <span className="font-mono text-xs tracking-widest uppercase">ELEMENTS</span>
             </NavLink>
             <NavLink
+                data-testid="nav-calendar"
                 to={`/project/${projectId}/calendar${episodeSuffix}`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -304,9 +311,10 @@ function ProjectList({
 
 function SeriesNav({ seriesId }: { seriesId: string }) {
     return (
-        <div className="mt-6 border-t border-lemon-gray-700 pt-4">
+        <div className="mt-6 border-t border-lemon-gray-700 pt-4" role="group" aria-label="Series pages">
             <span className="lemon-label block px-4 mb-3 text-lemon-cyan">SERIES</span>
             <NavLink
+                data-testid="nav-episodes"
                 to={`/series/${seriesId}`}
                 end
                 className={({ isActive }) =>
@@ -320,6 +328,7 @@ function SeriesNav({ seriesId }: { seriesId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">EPISODES</span>
             </NavLink>
             <NavLink
+                data-testid="nav-series-budget"
                 to={`/series/${seriesId}/budget`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -332,6 +341,7 @@ function SeriesNav({ seriesId }: { seriesId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">SERIES BUDGET</span>
             </NavLink>
             <NavLink
+                data-testid="nav-master-schedule"
                 to={`/series/${seriesId}/schedule`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -344,6 +354,7 @@ function SeriesNav({ seriesId }: { seriesId: string }) {
                 <span className="font-mono text-xs tracking-widest uppercase">MASTER SCHEDULE</span>
             </NavLink>
             <NavLink
+                data-testid="nav-series-roster"
                 to={`/series/${seriesId}/roster`}
                 className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
@@ -409,7 +420,7 @@ export function Sidebar() {
             </Link>
 
             {/* Main Nav */}
-            <nav className="flex-1 py-4 overflow-y-auto">
+            <nav className="flex-1 py-4 overflow-y-auto" aria-label="Main navigation">
                 <ProjectList
                     mode={projectId ? 'film' : seriesId ? 'tv' : null}
                     currentProjectId={projectId}
@@ -431,6 +442,7 @@ export function Sidebar() {
                     </span>
                 </div>
                 <button
+                    data-testid="sidebar-settings-button"
                     onClick={handleSettingsClick}
                     title={isOnSettings ? 'Go back' : 'Settings'}
                     className={`p-2 rounded transition-colors ${isOnSettings

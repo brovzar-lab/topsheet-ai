@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/stores/auth-store';
-import { Clapperboard, LogIn, Loader2 } from 'lucide-react';
+import { Clapperboard, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 interface AuthGateProps {
@@ -41,24 +41,26 @@ export function AuthGate({ children }: AuthGateProps) {
                 </div>
             </div>
 
-            {/* Tagline */}
-            <p className="font-mono text-xs tracking-widest text-lemon-gray-500 uppercase">
+            {/* Tagline — lemon-gray-400 (#9E9E9E) passes WCAG AA on #2A2A2A (5.17:1) */}
+            <p className="font-mono text-xs tracking-widest text-lemon-gray-400 uppercase">
                 Production Planning · Powered by AI
             </p>
 
             {/* Sign-in card */}
-            <div className="bg-lemon-bg-elevated border border-lemon-gray-700 rounded-xl p-8 flex flex-col items-center gap-6 w-80">
+            <main className="bg-lemon-bg-elevated border border-lemon-gray-700 rounded-xl p-8 flex flex-col items-center gap-6 w-80">
                 <Clapperboard size={32} className="text-lemon-cyan" />
                 <div className="text-center">
                     <p className="text-lemon-text-primary font-display font-bold text-base">
                         Sign in to access your projects
                     </p>
-                    <p className="text-lemon-gray-500 text-xs font-mono mt-1">
+                    <p className="text-lemon-gray-400 text-xs font-mono mt-1">
                         Your data syncs across all devices
                     </p>
                 </div>
                 <button
+                    data-testid="auth-signin-button"
                     onClick={signInWithGoogle}
+                    aria-label="Sign in with Google"
                     className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-semibold text-sm px-5 py-3 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -69,9 +71,10 @@ export function AuthGate({ children }: AuthGateProps) {
                     </svg>
                     Continue with Google
                 </button>
-            </div>
+            </main>
 
-            <p className="font-mono text-[0.6rem] tracking-widest text-lemon-gray-700 uppercase">
+            {/* Footer — lemon-gray-400 passes WCAG AA */}
+            <p className="font-mono text-[0.6rem] tracking-widest text-lemon-gray-400 uppercase">
                 TOPSHEET AI © 2026
             </p>
         </div>
