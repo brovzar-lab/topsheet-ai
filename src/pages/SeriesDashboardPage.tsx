@@ -107,6 +107,7 @@ function EpisodeCard({ episode, seriesId }: { episode: Episode; seriesId: string
       {isEmpty ? (
         <button
           onClick={handleUpload}
+          aria-label="Upload screenplay for this episode"
           className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-dashed border-lemon-gray-800 font-mono text-[0.56rem] tracking-wider uppercase text-lemon-gray-700 group-hover:text-lemon-cyan group-hover:border-lemon-cyan/20 transition-colors"
         >
           <span className="w-5 h-5 flex items-center justify-center border border-dashed border-lemon-gray-800 rounded group-hover:border-lemon-cyan/35 transition-colors text-[0.7rem]">↑</span>
@@ -208,6 +209,7 @@ export function SeriesDashboardPage() {
               Edit Series
             </button>
             <button
+              data-testid="upload-episode-button"
               onClick={() => {
                 if (firstAwaitingEpisode) {
                   navigate(`/series/${seriesId}/upload/${firstAwaitingEpisode.id}`);
@@ -293,6 +295,7 @@ export function SeriesDashboardPage() {
             {(['air', 'prod'] as const).map(o => (
               <button
                 key={o}
+                data-testid={o === 'air' ? 'sort-air-order' : 'sort-prod-order'}
                 onClick={() => setSortOrder(o)}
                 className={`font-mono text-[0.58rem] tracking-wider uppercase px-3 py-1.5 border rounded transition-colors ${
                   sortOrder === o

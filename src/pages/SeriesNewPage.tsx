@@ -107,6 +107,8 @@ export function SeriesNewPage() {
           <div>
             <label className="lemon-label block mb-1.5">Series Title</label>
             <input
+              data-testid="series-title-input"
+              aria-label="Series title"
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -211,6 +213,7 @@ export function SeriesNewPage() {
               <div className="w-px h-7 bg-lemon-gray-700 mx-1"></div>
               <div className="flex">
                 <input
+                  aria-label="Custom runtime in minutes"
                   type="number"
                   value={customRuntime}
                   onChange={e => setCustomRuntime(e.target.value)}
@@ -289,6 +292,7 @@ export function SeriesNewPage() {
           ← Back
         </button>
         <button
+          data-testid="create-series-button"
           type="button"
           onClick={handleSubmit}
           disabled={saving || !title.trim()}
