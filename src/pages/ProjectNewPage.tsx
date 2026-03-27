@@ -218,6 +218,7 @@ export function ProjectNewPage() {
                         <span className="text-lemon-text-muted">Project Details</span>
                         <span className="text-lemon-gray-600">·</span>
                         <input
+                            aria-label="Project title"
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
@@ -361,6 +362,7 @@ export function ProjectNewPage() {
                     {/* Action buttons */}
                     <div className="flex items-center gap-4">
                         <button
+                            data-testid="run-breakdown-button"
                             onClick={handleConfirm}
                             className="flex items-center gap-2 px-7 py-3 bg-lemon-cyan text-lemon-black font-display font-bold text-sm uppercase tracking-wider rounded hover:bg-lemon-cyan-dim transition-colors"
                         >
@@ -387,6 +389,8 @@ export function ProjectNewPage() {
                             <div className="sm:col-span-1">
                                 <label className="lemon-label block mb-2">TITLE (optional)</label>
                                 <input
+                                    data-testid="project-title-input"
+                                    aria-label="Project title"
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
@@ -422,6 +426,7 @@ export function ProjectNewPage() {
                     )}
 
                     <div
+                        data-testid="pdf-upload-zone"
                         onDrop={onDrop}
                         onDragOver={(e) => e.preventDefault()}
                         onClick={() => !isProcessing && fileInputRef.current?.click()}
@@ -435,6 +440,7 @@ export function ProjectNewPage() {
                                     : 'border-lemon-gray-700 hover:border-lemon-cyan/40'}`}
                     >
                         <input
+                            aria-label="Upload PDF screenplay"
                             ref={fileInputRef}
                             type="file"
                             accept=".pdf"

@@ -13,6 +13,7 @@ export function HomeScreen() {
             <div className="grid grid-cols-2 gap-4">
                 {/* Feature Film */}
                 <button
+                    data-testid="format-film"
                     onClick={() => navigate('/project/new')}
                     className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
                 >
@@ -35,6 +36,7 @@ export function HomeScreen() {
 
                 {/* TV Series */}
                 <button
+                    data-testid="format-tv"
                     onClick={() => navigate('/series/new')}
                     className="text-left p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-xl hover:border-lemon-cyan/40 transition-colors"
                 >
