@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "budgetDrafts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "_updatedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

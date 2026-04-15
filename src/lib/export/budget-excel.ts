@@ -14,6 +14,7 @@ import type { SceneBreakdown } from '@/types';
 import { fromCentavos, calcSectionTotals, getSection } from '@/lib/budget/calculator';
 import { BUDGET_CATEGORIES } from '@/data/budget-categories';
 
+const REVOKE_DELAY_MS = 5_000;
 // -----------------------------------------------------------------------
 // Brand colors (hex without #)
 // -----------------------------------------------------------------------
@@ -426,9 +427,12 @@ export async function exportBudgetExcel(
     const filename = `${safeTitle}_budget_v${draft.version}_${Date.now()}.xlsx`;
 
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+    } finally {
+        setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+    }
 }

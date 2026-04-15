@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParamState } from '@/hooks/useSearchParamState';
+import { useAuthStore } from '@/stores/auth-store';
+import { useSeriesStore } from '../stores/series-store';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
     DndContext,
     closestCenter,
@@ -11,35 +15,65 @@ import {
     type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-    SortableContext,
-    verticalListSortingStrategy,
-    useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import {
     CalendarDays,
-    GripVertical,
     RefreshCw,
     Plus,
-    Trash2,
-    ChevronDown,
     ChevronRight,
-    User2,
-    X,
     ArrowUpDown,
     Columns3,
     Check,
-    Pencil,
-    Scissors,
+    Clock,
 } from 'lucide-react';
-import type { StripboardStrip, ShootDay, SceneBreakdown } from '@/types';
+import type { StripboardStrip } from '@/types';
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { generateSchedule } from '@/lib/schedule/schedule-engine';
 import { detectConflicts } from '@/lib/schedule/conflict-detector';
-import { getCategoryById } from '@/data/element-categories';
-import { AssistantDirectorPanel, type ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+import { exportScheduleExcel } from '@/lib/export/schedule-excel';
+import { AssistantDirectorPanel, type ADPanelContext } from '@/components/AssistantDirectorPanel';
+import { OverlayStrip } from '@/components/schedule/OverlayStrip';
+import { DayGroup } from '@/components/schedule/DayGroup';
+
+// -----------------------------------------------------------------------
+// TV schedule helpers
+// -----------------------------------------------------------------------
+
+/** TV pages-per-day in 1/8ths. Drama = 80 (10 pages), Comedy/short-form = 96 (12 pages). */
+function getTvPagesPerDay(format: string, runtimeMinutes: number): number {
+    if (format === 'comedy' || runtimeMinutes <= 30) return 96;
+    return 80; // drama, procedural, limited, anthology, docuseries
+}
+
+const TV_SCHEDULE_BENCHMARKS: Record<string, { min: number; max: number }> = {
+    drama: { min: 6, max: 10 },
+    procedural: { min: 6, max: 10 },
+    limited: { min: 6, max: 10 },
+    anthology: { min: 6, max: 10 },
+    comedy: { min: 4, max: 6 },
+    docuseries: { min: 4, max: 8 },
+};
+
+function ShootDayValidationBanner({
+    days, format, runtimeMinutes,
+}: { days: number; format: string; runtimeMinutes: number }) {
+    const key = format in TV_SCHEDULE_BENCHMARKS ? format : (runtimeMinutes <= 30 ? 'comedy' : 'drama');
+    const { min, max } = TV_SCHEDULE_BENCHMARKS[key]!;
+    if (days >= min && days <= max) return null;
+    const isOver = days > max;
+    return (
+        <div className={`mb-4 px-4 py-3 rounded border text-sm font-mono ${
+            isOver
+                ? 'bg-lemon-coral/10 border-lemon-coral/40 text-lemon-coral'
+                : 'bg-lemon-yellow/10 border-lemon-yellow/40 text-lemon-yellow-dim'
+        }`}>
+            {isOver
+                ? `Schedule is ${days - max} day${days - max > 1 ? 's' : ''} over the ${max}-day benchmark for this format (${days} days scheduled).`
+                : `Schedule is below the minimum ${min}-day benchmark for this format (${days} days scheduled). Verify page count is correct.`
+            }
+        </div>
+    );
+}
 
 // -----------------------------------------------------------------------
 // Types
@@ -66,532 +100,17 @@ const SORT_OPTIONS: { key: SortField; label: string }[] = [
 ];
 
 // -----------------------------------------------------------------------
-// Strip color → CSS classes
-// -----------------------------------------------------------------------
-
-const STRIP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-    white: { bg: 'bg-white/90', border: 'border-l-white', text: 'text-gray-900' },
-    yellow: { bg: 'bg-yellow-300/80', border: 'border-l-yellow-400', text: 'text-gray-900' },
-    blue: { bg: 'bg-blue-400/70', border: 'border-l-blue-500', text: 'text-white' },
-    green: { bg: 'bg-green-400/70', border: 'border-l-green-500', text: 'text-white' },
-};
-
-// -----------------------------------------------------------------------
-// Inline Edit Input
-// -----------------------------------------------------------------------
-
-function InlineInput({
-    value,
-    onCommit,
-    onCancel,
-    className,
-}: {
-    value: string;
-    onCommit: (val: string) => void;
-    onCancel: () => void;
-    className?: string;
-}) {
-    const ref = useRef<HTMLInputElement>(null);
-    const [val, setVal] = useState(value);
-
-    useEffect(() => {
-        ref.current?.focus();
-        ref.current?.select();
-    }, []);
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') { e.preventDefault(); onCommit(val); }
-        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-    };
-
-    return (
-        <input
-            ref={ref}
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            onBlur={() => onCommit(val)}
-            onKeyDown={handleKeyDown}
-            className={`bg-transparent border-b border-current outline-none font-mono text-xs ${className ?? ''}`}
-            onClick={(e) => e.stopPropagation()}
-        />
-    );
-}
-
-// -----------------------------------------------------------------------
-// Synopsis Panel (click strip to expand)
-// -----------------------------------------------------------------------
-
-function StripSynopsis({
-    strip,
-    breakdown,
-    sceneContent,
-    onClose,
-    onUpdateNotes,
-    onSplitScene,
-}: {
-    strip: StripboardStrip;
-    breakdown?: SceneBreakdown;
-    sceneContent?: string;
-    onClose: () => void;
-    onUpdateNotes: (notes: string) => void;
-    onSplitScene: () => void;
-}) {
-    const [editingNotes, setEditingNotes] = useState(false);
-    const [notesVal, setNotesVal] = useState(strip.notes ?? '');
-
-    // Group elements by category
-    const grouped = useMemo(() => {
-        if (!breakdown) return [];
-        const map = new Map<string, { categoryId: string; name: string; color: string; items: string[] }>();
-        for (const el of breakdown.elements) {
-            const cat = getCategoryById(el.categoryId);
-            if (!map.has(el.categoryId)) {
-                map.set(el.categoryId, {
-                    categoryId: el.categoryId,
-                    name: cat?.name ?? el.categoryId,
-                    color: cat?.color ?? '#888',
-                    items: [],
-                });
-            }
-            const label = el.quantity && el.quantity > 1 ? `${el.name} ×${el.quantity}` : el.name;
-            map.get(el.categoryId)!.items.push(label);
-        }
-        return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }, [breakdown]);
-
-    // Build a short synopsis paragraph from the scene content
-    const synopsis = useMemo(() => {
-        if (!sceneContent) return null;
-        const trimmed = sceneContent.slice(0, 300).trim();
-        const lastSpace = trimmed.lastIndexOf(' ');
-        return lastSpace > 200 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…';
-    }, [sceneContent]);
-
-    return (
-        <div className="bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg p-4 mx-2 mb-3 animate-in">
-            <div className="flex items-center justify-between mb-3">
-                <h4 className="text-lemon-cyan text-sm">
-                    Scene {strip.sceneNumber} — {strip.location}
-                </h4>
-                <button onClick={onClose} className="text-lemon-gray-500 hover:text-lemon-text-primary transition-colors">
-                    <X size={14} />
-                </button>
-            </div>
-
-            {/* Scene content preview */}
-            {synopsis && (
-                <p className="text-xs text-lemon-text-muted mb-3 leading-relaxed italic border-l-2 border-lemon-gray-700 pl-3">
-                    {synopsis}
-                </p>
-            )}
-
-            {/* Breakdown elements by category */}
-            {grouped.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {grouped.map((group) => (
-                        <div key={group.categoryId} className="text-xs">
-                            <span
-                                className="font-mono font-bold uppercase text-[0.6rem] tracking-wider"
-                                style={{ color: group.color }}
-                            >
-                                {group.name}
-                            </span>
-                            <ul className="mt-0.5 space-y-0.5">
-                                {group.items.map((item, i) => (
-                                    <li key={i} className="text-lemon-text-body truncate">
-                                        • {item}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-xs text-lemon-text-muted">No breakdown elements yet — run the breakdown first.</p>
-            )}
-
-            {/* Notes section with inline editing */}
-            <div className="mt-3 pt-3 border-t border-lemon-gray-700">
-                <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-[0.6rem] text-lemon-text-muted uppercase tracking-wider">Notes</span>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setEditingNotes(true); }}
-                        className="text-lemon-gray-500 hover:text-lemon-cyan transition-colors"
-                    >
-                        <Pencil size={10} />
-                    </button>
-                </div>
-                {editingNotes ? (
-                    <textarea
-                        value={notesVal}
-                        onChange={(e) => setNotesVal(e.target.value)}
-                        onBlur={() => { onUpdateNotes(notesVal); setEditingNotes(false); }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Escape') { setEditingNotes(false); setNotesVal(strip.notes ?? ''); }
-                        }}
-                        autoFocus
-                        rows={2}
-                        className="w-full bg-lemon-bg-primary border border-lemon-gray-600 rounded px-2 py-1 text-xs text-lemon-text-body font-mono outline-none focus:border-lemon-cyan resize-none"
-                        onClick={(e) => e.stopPropagation()}
-                    />
-                ) : (
-                    <p className="text-xs text-lemon-text-muted italic">
-                        {strip.notes || 'No notes. Click pencil to add.'}
-                    </p>
-                )}
-            </div>
-
-            {/* Split Scene button */}
-            <div className="mt-3 pt-3 border-t border-lemon-gray-700">
-                <button
-                    onClick={(e) => { e.stopPropagation(); onSplitScene(); }}
-                    className="flex items-center gap-1.5 text-xs text-lemon-gray-400 hover:text-lemon-yellow transition-colors font-mono"
-                >
-                    <Scissors size={11} />
-                    Split Scene
-                </button>
-            </div>
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Sortable Strip Component
-// -----------------------------------------------------------------------
-
-function SortableStrip({
-    strip,
-    dayId,
-    isExpanded,
-    onToggle,
-    breakdown,
-    sceneContent,
-    visibleColumns,
-    editingStripId,
-    editField,
-    onStartEdit,
-    onCommitEdit,
-    onCancelEdit,
-    onUpdateNotes,
-    onSplitScene,
-}: {
-    strip: StripboardStrip;
-    dayId: string;
-    isExpanded: boolean;
-    onToggle: () => void;
-    breakdown?: SceneBreakdown;
-    sceneContent?: string;
-    visibleColumns: Set<ColumnKey>;
-    editingStripId: string | null;
-    editField: string | null;
-    onStartEdit: (stripId: string, field: string) => void;
-    onCommitEdit: (stripId: string, field: string, value: string) => void;
-    onCancelEdit: () => void;
-    onUpdateNotes: (stripId: string, notes: string) => void;
-    onSplitScene: (stripId: string) => void;
-}) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({
-        id: strip.id,
-        data: { dayId, strip },
-    });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.3 : 1,
-    };
-
-    const colors = STRIP_COLORS[strip.stripColor] ?? STRIP_COLORS.white!;
-    const pages = strip.pageCount;
-    const fullPages = Math.floor(pages / 8);
-    const eighths = pages % 8;
-    const pageDisplay = fullPages > 0
-        ? `${fullPages}${eighths > 0 ? ` ${eighths}/8` : ''}`
-        : `${eighths}/8`;
-
-    const isEditing = editingStripId === strip.id;
-
-    return (
-        <div ref={setNodeRef} style={style}>
-            <div
-                className={`flex items-center gap-2 border-l-4 ${colors.border} ${colors.bg} ${colors.text}
-                    px-3 py-2 text-xs font-mono transition-shadow cursor-pointer
-                    hover:shadow-md hover:brightness-95
-                    ${isDragging ? 'shadow-lg ring-2 ring-lemon-cyan' : ''}
-                    ${isExpanded ? 'ring-1 ring-lemon-cyan/50' : ''}`}
-                onClick={onToggle}
-            >
-                {/* Drag handle */}
-                <button
-                    {...attributes}
-                    {...listeners}
-                    className="cursor-grab active:cursor-grabbing text-current/50 hover:text-current/80 flex-shrink-0"
-                    tabIndex={-1}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <GripVertical size={14} />
-                </button>
-
-                {/* Scene number */}
-                {visibleColumns.has('sceneNumber') && (
-                    <span className="font-bold w-10 text-center flex-shrink-0">
-                        {strip.sceneNumber}
-                    </span>
-                )}
-
-                {/* INT/EXT */}
-                {visibleColumns.has('intExt') && (
-                    <span className="w-8 text-center flex-shrink-0 opacity-70 text-[0.65rem]">
-                        {strip.intExt}
-                    </span>
-                )}
-
-                {/* Location — double-click to edit */}
-                {visibleColumns.has('location') && (
-                    isEditing && editField === 'location' ? (
-                        <InlineInput
-                            value={strip.location}
-                            onCommit={(v) => onCommitEdit(strip.id, 'location', v)}
-                            onCancel={onCancelEdit}
-                            className="flex-1"
-                        />
-                    ) : (
-                        <span
-                            className="flex-1 truncate font-medium hover:underline hover:decoration-dotted"
-                            onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(strip.id, 'location'); }}
-                            title="Double-click to edit"
-                        >
-                            {strip.location}
-                            {strip.subLocation ? ` — ${strip.subLocation}` : ''}
-                        </span>
-                    )
-                )}
-
-                {/* Time of day */}
-                {visibleColumns.has('timeOfDay') && (
-                    <span className="w-14 text-center flex-shrink-0 opacity-70 text-[0.65rem] uppercase">
-                        {strip.timeOfDay}
-                    </span>
-                )}
-
-                {/* Pages */}
-                {visibleColumns.has('pages') && (
-                    <span className="w-12 text-right flex-shrink-0 font-bold">
-                        {pageDisplay}
-                    </span>
-                )}
-
-                {/* Cast count */}
-                {visibleColumns.has('cast') && strip.characters.length > 0 && (
-                    <span className="flex items-center gap-0.5 flex-shrink-0 opacity-60" title={strip.characters.join(', ')}>
-                        <User2 size={11} />
-                        <span>{strip.characters.length}</span>
-                    </span>
-                )}
-
-                {/* Expand indicator */}
-                <span className="flex-shrink-0 opacity-40">
-                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                </span>
-            </div>
-
-            {/* Synopsis panel */}
-            {isExpanded && (
-                <StripSynopsis
-                    strip={strip}
-                    breakdown={breakdown}
-                    sceneContent={sceneContent}
-                    onClose={onToggle}
-                    onUpdateNotes={(notes) => onUpdateNotes(strip.id, notes)}
-                    onSplitScene={() => onSplitScene(strip.id)}
-                />
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Overlay Strip (shown while dragging)
-// -----------------------------------------------------------------------
-
-function OverlayStrip({ strip }: { strip: StripboardStrip }) {
-    const colors = STRIP_COLORS[strip.stripColor] ?? STRIP_COLORS.white!;
-    return (
-        <div
-            className={`flex items-center gap-2 border-l-4 ${colors.border} ${colors.bg} ${colors.text}
-                px-3 py-2 text-xs font-mono shadow-2xl ring-2 ring-lemon-cyan rounded-sm`}
-        >
-            <GripVertical size={14} className="opacity-50" />
-            <span className="font-bold w-10 text-center">{strip.sceneNumber}</span>
-            <span className="w-8 text-center opacity-70 text-[0.65rem]">{strip.intExt}</span>
-            <span className="flex-1 truncate font-medium">{strip.location}</span>
-            <span className="w-14 text-center opacity-70 text-[0.65rem] uppercase">{strip.timeOfDay}</span>
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
-// Shoot Day Group
-// -----------------------------------------------------------------------
-
-function DayGroup({
-    day,
-    onRemoveDay,
-    expandedStripId,
-    onToggleStrip,
-    onDayClick,
-    breakdowns,
-    sceneContentMap,
-    visibleColumns,
-    editingStripId,
-    editField,
-    onStartEdit,
-    onCommitEdit,
-    onCancelEdit,
-    onUpdateNotes,
-    onSplitScene,
-    onSetDayDate,
-}: {
-    day: ShootDay;
-    projectId: string;
-    onRemoveDay: (dayId: string) => void;
-    expandedStripId: string | null;
-    onToggleStrip: (stripId: string) => void;
-    onDayClick: () => void;
-    breakdowns: Record<string, SceneBreakdown>;
-    sceneContentMap: Record<string, string>;
-    visibleColumns: Set<ColumnKey>;
-    editingStripId: string | null;
-    editField: string | null;
-    onStartEdit: (stripId: string, field: string) => void;
-    onCommitEdit: (stripId: string, field: string, value: string) => void;
-    onCancelEdit: () => void;
-    onUpdateNotes: (stripId: string, notes: string) => void;
-    onSplitScene: (dayId: string, stripId: string) => void;
-    onSetDayDate: (dayId: string, date: string) => void;
-}) {
-    const [collapsed, setCollapsed] = useState(false);
-    const totalFullPages = Math.floor(day.totalPages / 8);
-    const totalEighths = day.totalPages % 8;
-    const pageLabel = totalFullPages > 0
-        ? `${totalFullPages}${totalEighths > 0 ? ` ${totalEighths}/8` : ''} pg`
-        : `${totalEighths}/8 pg`;
-
-    // Unique characters across all strips in this day
-    const uniqueChars = useMemo(() => {
-        const set = new Set<string>();
-        for (const s of day.strips) {
-            for (const c of s.characters) set.add(c);
-        }
-        return set;
-    }, [day.strips]);
-
-    return (
-        <div className="mb-4">
-            {/* Day header */}
-            <div
-                className="flex items-center gap-3 px-3 py-2 bg-lemon-bg-elevated rounded-t border border-lemon-gray-700 cursor-pointer hover:bg-lemon-bg-secondary/80 transition-colors"
-                onClick={onDayClick}
-            >
-                <button
-                    onClick={() => setCollapsed((v) => !v)}
-                    className="text-lemon-text-muted hover:text-lemon-cyan transition-colors"
-                >
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </button>
-
-                <span className="font-display font-black text-lemon-cyan text-sm tracking-wider">
-                    DAY {day.dayNumber}
-                </span>
-
-                <input
-                    type="date"
-                    value={day.date ?? ''}
-                    onChange={(e) => onSetDayDate(day.id, e.target.value)}
-                    className="font-mono text-[0.65rem] text-lemon-text-muted bg-transparent border border-transparent hover:border-lemon-gray-600 focus:border-lemon-cyan rounded px-1 py-0.5 outline-none cursor-pointer transition-colors"
-                    title="Set shoot date"
-                />
-
-                <span className="font-mono text-[0.65rem] text-lemon-text-muted truncate">
-                    {day.location || 'No location'}
-                </span>
-
-                <span className="ml-auto font-mono text-xs text-lemon-yellow font-bold">
-                    {pageLabel}
-                </span>
-
-                <span className="font-mono text-[0.65rem] text-lemon-text-muted">
-                    {day.strips.length} scenes
-                </span>
-
-                {uniqueChars.size > 0 && (
-                    <span className="font-mono text-[0.65rem] text-lemon-text-muted flex items-center gap-0.5">
-                        <User2 size={10} /> {uniqueChars.size}
-                    </span>
-                )}
-
-                <button
-                    onClick={() => onRemoveDay(day.id)}
-                    className="text-lemon-gray-500 hover:text-lemon-coral transition-colors p-1"
-                    title="Remove day"
-                >
-                    <Trash2 size={12} />
-                </button>
-            </div>
-
-            {/* Strips */}
-            {!collapsed && (
-                <div className="border-x border-b border-lemon-gray-700 rounded-b divide-y divide-lemon-gray-700/50">
-                    <SortableContext
-                        items={day.strips.map((s) => s.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        {day.strips.length === 0 ? (
-                            <div className="px-4 py-6 text-center text-lemon-text-muted font-mono text-xs">
-                                Drop scenes here
-                            </div>
-                        ) : (
-                            day.strips.map((strip) => (
-                                <SortableStrip
-                                    key={strip.id}
-                                    strip={strip}
-                                    dayId={day.id}
-                                    isExpanded={expandedStripId === strip.id}
-                                    onToggle={() => onToggleStrip(strip.id)}
-                                    breakdown={breakdowns[strip.sceneNumber]}
-                                    sceneContent={sceneContentMap[strip.sceneNumber]}
-                                    visibleColumns={visibleColumns}
-                                    editingStripId={editingStripId}
-                                    editField={editField}
-                                    onStartEdit={onStartEdit}
-                                    onCommitEdit={onCommitEdit}
-                                    onCancelEdit={onCancelEdit}
-                                    onUpdateNotes={onUpdateNotes}
-                                    onSplitScene={(stripId) => onSplitScene(day.id, stripId)}
-                                />
-                            ))
-                        )}
-                    </SortableContext>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// -----------------------------------------------------------------------
 // Schedule Page
 // -----------------------------------------------------------------------
 
 export function SchedulePage() {
     const { id: projectId } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
+    const [searchParams] = useSearchParams();
+    const seriesId = searchParams.get('seriesId');
+    const { activeSeries, loadSeries } = useSeriesStore();
+    const user = useAuthStore((s) => s.user);
 
     const scenes = useSceneStore((s) => s.getScenes(projectId ?? ''));
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
@@ -605,10 +124,12 @@ export function SchedulePage() {
     const sortStrips = useScheduleStore((s) => s.sortStrips);
     const splitStripAction = useScheduleStore((s) => s.splitStrip);
     const setDayDate = useScheduleStore((s) => s.setDayDate);
+    const setScheduleSettings = useScheduleStore((s) => s.setScheduleSettings);
 
     // State for the AD panel
-    const [activeDayNumber, setActiveDayNumber] = useState<number | null>(null);
+    const [activeDayNumber, setActiveDayNumber] = useSearchParamState('day', null, 'number');
     const [adPanelOpen, setAdPanelOpen] = useState(true);
+    const [adContext, setAdContext] = useState<ADPanelContext | null>(null);
     const [activeStrip, setActiveStrip] = useState<StripboardStrip | null>(null);
 
     // Expanded strip for synopsis
@@ -644,6 +165,14 @@ export function SchedulePage() {
         })
     );
 
+    // Load series data when the page is opened in episode context
+    useEffect(() => {
+        if (!seriesId || !user?.uid) return;
+        if (activeSeries?.id === seriesId) return; // already loaded
+        loadSeries(user.uid, seriesId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seriesId, user?.uid]);
+
     // Ref guard: ensure auto-generation runs at most once per component lifecycle.
     // Using a ref prevents the effect from cycling when setSchedule updates the store,
     // which would otherwise toggle `schedule` between null/defined on each render.
@@ -654,7 +183,10 @@ export function SchedulePage() {
         if (schedule) return; // Already have one — no-op
 
         didAutoGenerate.current = true;
-        const draft = generateSchedule(scenes, breakdowns, { projectId });
+        const targetPagesPerDay = seriesId && activeSeries
+            ? getTvPagesPerDay(activeSeries.format, activeSeries.runtimeMinutes)
+            : 32; // feature film default
+        const draft = generateSchedule(scenes, breakdowns, { projectId, targetPagesPerDay });
         setSchedule(projectId, draft);
     // scenes and breakdowns are arrays/objects; use .length + projectId as stable triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -664,9 +196,12 @@ export function SchedulePage() {
     const handleRegenerate = useCallback(() => {
         if (!projectId || scenes.length === 0) return;
         clearSchedule(projectId);
-        const draft = generateSchedule(scenes, breakdowns, { projectId });
+        const targetPagesPerDay = seriesId && activeSeries
+            ? getTvPagesPerDay(activeSeries.format, activeSeries.runtimeMinutes)
+            : 32; // feature film default
+        const draft = generateSchedule(scenes, breakdowns, { projectId, targetPagesPerDay });
         setSchedule(projectId, draft);
-    }, [projectId, scenes, breakdowns, clearSchedule, setSchedule]);
+    }, [projectId, scenes, breakdowns, seriesId, activeSeries, clearSchedule, setSchedule]);
 
     // Toggle strip synopsis
     const handleToggleStrip = useCallback((stripId: string) => {
@@ -743,7 +278,7 @@ export function SchedulePage() {
             let targetDayId = activeData.dayId;
             let targetIndex = 0;
 
-            // Check if "over" is another strip
+
             const overData = over.data.current as { dayId: string; strip: StripboardStrip } | undefined;
             if (overData) {
                 targetDayId = overData.dayId;
@@ -795,6 +330,7 @@ export function SchedulePage() {
 
     return (
         <div className="flex flex-col h-full">
+            <EpisodeBreadcrumb />
             {/* ── Header ── */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -887,6 +423,7 @@ export function SchedulePage() {
                         </div>
 
                         <button
+                            data-testid="add-day-button"
                             onClick={() => addDay(projectId)}
                             className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body
                                 font-mono text-xs rounded hover:bg-lemon-bg-elevated transition-colors"
@@ -900,6 +437,15 @@ export function SchedulePage() {
                         >
                             <RefreshCw size={12} /> REGENERATE
                         </button>
+                        {schedule && (
+                            <button
+                                onClick={() => exportScheduleExcel(schedule, `Project_${projectId}`)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-lemon-gray-600 text-lemon-text-body
+                                    font-mono text-xs rounded hover:border-lemon-yellow hover:text-lemon-yellow transition-colors"
+                            >
+                                ↓ EXPORT XLSX
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -921,6 +467,44 @@ export function SchedulePage() {
                 <span className="ml-4 font-mono text-[0.6rem] text-lemon-text-muted italic">
                     Click strip to see synopsis • Double-click location to edit
                 </span>
+
+                {/* Schedule Settings */}
+                {schedule && (
+                    <div className="ml-auto flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                            <Clock size={10} className="text-lemon-text-muted" />
+                            <span className="font-mono text-[0.6rem] text-lemon-text-muted">hrs/day</span>
+                            <input
+                                aria-label="Hours per day"
+                                type="number"
+                                min={6}
+                                max={18}
+                                value={schedule.hoursPerDay ?? 12}
+                                onChange={(e) => {
+                                    const v = Math.max(6, Math.min(18, parseInt(e.target.value) || 12));
+                                    setScheduleSettings(projectId, { hoursPerDay: v });
+                                }}
+                                className="w-10 bg-lemon-bg-elevated border border-lemon-gray-600 rounded px-1 py-0.5 text-[0.6rem] font-mono text-lemon-text-body text-center outline-none focus:border-lemon-cyan"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <CalendarDays size={10} className="text-lemon-text-muted" />
+                            <span className="font-mono text-[0.6rem] text-lemon-text-muted">days/wk</span>
+                            <input
+                                aria-label="Shoot days per week"
+                                type="number"
+                                min={4}
+                                max={7}
+                                value={schedule.shootDaysPerWeek ?? 5}
+                                onChange={(e) => {
+                                    const v = Math.max(4, Math.min(7, parseInt(e.target.value) || 5));
+                                    setScheduleSettings(projectId, { shootDaysPerWeek: v });
+                                }}
+                                className="w-10 bg-lemon-bg-elevated border border-lemon-gray-600 rounded px-1 py-0.5 text-[0.6rem] font-mono text-lemon-text-body text-center outline-none focus:border-lemon-cyan"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Conflict Detection Panel ── */}
@@ -948,12 +532,34 @@ export function SchedulePage() {
                         </div>
                         <div className="space-y-0.5 max-h-24 overflow-y-auto">
                             {conflicts.map((c) => (
-                                <div key={c.id} className={`font-mono text-[0.6rem] flex items-center gap-1.5 ${c.severity === 'error' ? 'text-red-400' :
-                                    c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
-                                    }`}>
+                                <button
+                                    key={c.id}
+                                    onClick={() => {
+                                        // Find the affected day number
+                                        const dayNum = c.dayNumber ?? null;
+                                        if (dayNum) {
+                                            setActiveDayNumber(dayNum);
+                                            // Scroll to the day element and flash-highlight it
+                                            const dayEl = document.querySelector(`[data-day-number="${dayNum}"]`);
+                                            if (dayEl) {
+                                                dayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                dayEl.classList.add('ring-2', 'ring-lemon-cyan', 'rounded-lg');
+                                                setTimeout(() => dayEl.classList.remove('ring-2', 'ring-lemon-cyan', 'rounded-lg'), 1500);
+                                            }
+                                        }
+                                        // Open Rafa with context
+                                        setAdContext({ dayNumber: dayNum ?? 0, issue: c.message });
+                                        setAdPanelOpen(true);
+                                    }}
+                                    className={`w-full text-left font-mono text-[0.6rem] flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors cursor-pointer
+                                        hover:bg-lemon-bg-elevated/60 ${c.severity === 'error' ? 'text-red-400' :
+                                        c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
+                                        }`}
+                                >
                                     <span>{c.severity === 'error' ? '🔴' : c.severity === 'warning' ? '🟡' : 'ℹ️'}</span>
-                                    {c.message}
-                                </div>
+                                    <span className="flex-1">{c.message}</span>
+                                    <ChevronRight size={10} className="opacity-40 flex-shrink-0" />
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -965,6 +571,13 @@ export function SchedulePage() {
 
                 {/* Stripboard */}
                 <div className="flex-1 overflow-y-auto px-6 py-4" onClick={() => { setSortMenuOpen(false); setColumnMenuOpen(false); }}>
+                    {seriesId && activeSeries && schedule && (
+                        <ShootDayValidationBanner
+                            days={schedule.shootDays.length}
+                            format={activeSeries.format}
+                            runtimeMinutes={activeSeries.runtimeMinutes}
+                        />
+                    )}
                     {schedule ? (
                         <DndContext
                             sensors={sensors}
@@ -1013,12 +626,19 @@ export function SchedulePage() {
                     projectId={projectId}
                     isOpen={adPanelOpen}
                     onToggle={() => setAdPanelOpen(v => !v)}
-                    snapshot={schedule ? {
+                    context={adContext}
+                    snapshot={{
                         projectId,
-                        schedule,
+                        schedule: schedule ?? undefined,
                         breakdowns,
                         activeDayNumber,
-                    } : null}
+                        scenes: scenes.map((sc) => ({
+                            sceneNumber: sc.sceneNumber,
+                            slugline: sc.slugline,
+                            content: sc.content,
+                            pageCount: sc.pageCount,
+                        })),
+                    }}
                 />
             </div>
         </div>

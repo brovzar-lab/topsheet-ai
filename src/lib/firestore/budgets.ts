@@ -6,10 +6,13 @@ import {
     getDocs,
     deleteDoc,
     writeBatch,
+    query,
+    where,
     serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { BudgetDraft, BudgetLineItem } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 // ── Collection References ──────────────────────────────────────────────────
 
@@ -28,10 +31,10 @@ const lineItemRef = (uid: string, draftId: string, lineId: string) =>
 export async function saveDraftHeader(uid: string, draft: BudgetDraft): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lineItems, ...header } = draft;
-    await setDoc(draftRef(uid, draft.id), {
+    await setDoc(draftRef(uid, draft.id), stripUndefined({
         ...header,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 /** Save a single line item to the subcollection */
@@ -40,7 +43,7 @@ export async function saveLineItem(
     draftId: string,
     line: BudgetLineItem
 ): Promise<void> {
-    await setDoc(lineItemRef(uid, draftId, line.id), line);
+    await setDoc(lineItemRef(uid, draftId, line.id), stripUndefined(line));
 }
 
 /** Batch-save many line items — Firestore allows 500 ops per batch */
@@ -54,7 +57,7 @@ export async function bulkSaveLineItems(
         const batch = writeBatch(db);
         const chunk = lines.slice(i, i + BATCH_SIZE);
         for (const line of chunk) {
-            batch.set(lineItemRef(uid, draftId, line.id), line);
+            batch.set(lineItemRef(uid, draftId, line.id), stripUndefined(line));
         }
         await batch.commit();
     }
@@ -93,18 +96,16 @@ export async function loadDraftsForProject(
     uid: string,
     projectId: string
 ): Promise<BudgetDraft[]> {
-    // Load all draft headers for this project
-    const allDraftsSnap = await getDocs(
-        collection(db, 'users', uid, 'budgetDrafts')
+    // Query only drafts for this project — avoids full table scan
+    const q = query(
+        collection(db, 'users', uid, 'budgetDrafts'),
+        where('projectId', '==', projectId)
     );
-
-    const projectDraftDocs = allDraftsSnap.docs.filter(
-        (d) => d.data().projectId === projectId
-    );
+    const projectDraftDocs = await getDocs(q);
 
     // Assemble each draft with its line items
     const drafts = await Promise.all(
-        projectDraftDocs.map(async (draftDoc) => {
+        projectDraftDocs.docs.map(async (draftDoc) => {
             const header = draftDoc.data();
             const lineSnap = await getDocs(lineItemsRef(uid, draftDoc.id));
             const lineItems = lineSnap.docs.map((d) => d.data() as BudgetLineItem);

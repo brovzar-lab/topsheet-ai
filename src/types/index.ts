@@ -10,3 +10,8 @@ export type { MPIItem, MPIDataPoint, MPICategory, LearnedMPIRecord, MPIUploadRes
 export type {
     StripColor, StripboardStrip, BannerStrip, ShootDay, ScheduleDraft,
 } from './schedule';
+export type {
+    SeriesFormat, RuntimeTemplate, EpisodeStatus, Series, Episode,
+    RosterEntry, AmortizedCostLine, SeriesBudget, CreateSeriesInput,
+} from './series';
+export { deriveRuntimeTemplate } from './series';

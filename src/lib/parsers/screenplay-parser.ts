@@ -41,6 +41,7 @@ const TIME_OF_DAY_KEYWORDS: Record<string, TimeOfDay> = {
     'DÍA': 'DÍA', 'DIA': 'DÍA', 'NOCHE': 'NOCHE',
     'TARDE': 'TARDE',
     'ATARDECER': 'ATARDECER', 'AMANECER': 'AMANECER', 'MADRUGADA': 'MADRUGADA',
+    'ANOCHECER': 'NOCHE', 'ENTRADA': 'DÍA', 'ENTRADA DE DÍA': 'DÍA',
     'CONTINUO': 'CONTINUO', 'DESPUÉS': 'DESPUÉS', 'DESPUES': 'DESPUÉS',
     'MISMO TIEMPO': 'MISMO TIEMPO',
 };
@@ -72,6 +73,24 @@ function normalizeIntExt(raw: string): IntExt {
 }
 
 /**
+ * Strip trailing scene/page numbers from a slugline fragment.
+ *
+ * PDFs print the scene number on BOTH sides of the heading and often glue
+ * the right-side number directly to the last word:
+ *   "AMANECER3 3"  →  pass 1 strips " 3"  →  pass 2 strips glued "3"
+ *   "NOCHE 123H"   →  pass 1 strips " 123H"
+ *   "DÍA"          →  unchanged (no false positives)
+ *
+ * Multi-pass ensures both spaced AND glued variants are always caught.
+ */
+function stripTrailingSceneNumber(text: string): string {
+    return text
+        .replace(/\s+\d+[A-Z]{0,2}\s*$/, '')   // pass 1: space-separated (" 4", " 123H")
+        .replace(/\d+[A-Z]{0,2}\s*$/, '')       // pass 2: glued to last word ("AMANECER4")
+        .trim();
+}
+
+/**
  * Parse location and time-of-day from the text after "INT." / "EXT."
  *
  * Handles both formats:
@@ -79,11 +98,18 @@ function normalizeIntExt(raw: string): IntExt {
  *   - Period-separated:  "SALÓN DE CLASES DE LA UNAM. DÍA  123H"
  */
 function parseLocationAndTime(rest: string): { location: string; subLocation?: string; timeOfDay: TimeOfDay } {
-    // Strip trailing scene number (e.g., "  134" or "  123H")
-    const cleaned = rest.replace(/\s+\d+[A-Z]{0,2}\s*$/, '').trim();
+    // Strip trailing scene/page numbers using multi-pass helper.
+    // PDFs often produce "AMANECER3 3" — single-pass only removes " 3",
+    // leaving "AMANECER3". The multi-pass helper catches both.
+    const cleaned = stripTrailingSceneNumber(rest);
 
-    // Try dash separation first: LOCATION - TIME or LOCATION – TIME
-    const dashMatch = cleaned.match(/^(.+?)\s*[-–—]\s*(.+?)$/);
+    // Try dash separation: LOCATION - TIME or LOCATION – TIME
+    // Use GREEDY (.+) on group 1 so we split on the LAST dash.
+    // Sluglines have format: LOCATION – SUBLOCATION – TIME_OF_DAY
+    // The time-of-day is ALWAYS the last segment, so we want group 2 to be that last segment.
+    // Lazy (.+?) would have split on the FIRST dash and sent 'SUBLOCATION – AMANECER4' as group 2,
+    // which fails the time-of-day lookup even though lookupTimeOfDay handles trailing digits.
+    const dashMatch = cleaned.match(/^(.+)\s*[-\u2013\u2014]\s*(.+?)$/);
     if (dashMatch && dashMatch[1] && dashMatch[2]) {
         const tod = lookupTimeOfDay(dashMatch[2].trim());
         if (tod) {
@@ -110,7 +136,12 @@ function parseLocationAndTime(rest: string): { location: string; subLocation?: s
 
 function lookupTimeOfDay(raw: string): TimeOfDay | null {
     const upper = raw.toUpperCase().trim();
-    return TIME_OF_DAY_KEYWORDS[upper] ?? null;
+    // Exact match first
+    if (TIME_OF_DAY_KEYWORDS[upper]) return TIME_OF_DAY_KEYWORDS[upper]!;
+    // Strip trailing digits, periods, and whitespace (e.g. "AMANECER1", "NOCHE.", "DIA 2")
+    const cleaned = upper.replace(/[\d.]+$/, '').trim();
+    if (cleaned && TIME_OF_DAY_KEYWORDS[cleaned]) return TIME_OF_DAY_KEYWORDS[cleaned]!;
+    return null;
 }
 
 function splitLocation(raw: string): { location: string; subLocation?: string } {
@@ -128,7 +159,21 @@ function splitLocation(raw: string): { location: string; subLocation?: string } 
 function buildSlugline(intExtRaw: string, restOfLine: string, rawHeading: string): Slugline {
     const intExt = normalizeIntExt(intExtRaw);
     const { location, subLocation, timeOfDay } = parseLocationAndTime(restOfLine);
-    return { intExt, location, subLocation, timeOfDay, raw: rawHeading };
+    // Clean the raw heading: strip leading scene number, then trailing via multi-pass helper.
+    const cleanRaw = stripTrailingSceneNumber(
+        rawHeading.replace(/^\s*\d+[A-Z]{0,2}\s+/, ''),  // leading scene number
+    );
+
+    // ── Post-parse sanity check ──────────────────────────────────────────
+    // Final guard: if trailing digits somehow survived (edge-case PDFs),
+    // strip them one more time. This is the "always double-check" safety net.
+    const sanitized = cleanRaw.replace(/\d+[A-Z]{0,2}\s*$/, '').trim();
+    if (sanitized !== cleanRaw) {
+        console.warn(
+            `[screenplay-parser] Residual scene number stripped from raw heading: "${cleanRaw}" → "${sanitized}"`,
+        );
+    }
+    return { intExt, location, subLocation, timeOfDay, raw: sanitized || cleanRaw };
 }
 
 // ---------------------------------------------------------------------------

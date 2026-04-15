@@ -5,13 +5,19 @@
  * Rows = characters, Columns = shoot days, Cells = W (work), H (hold), SW (start/work), WF (work/finish).
  */
 
-import { useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Users, ArrowLeft } from 'lucide-react';
+import { useMemo, useEffect, useState } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
+import { Users, ArrowLeft, Bot } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
-
-// Status codes
-type DOODStatus = 'W' | 'SW' | 'WF' | 'SWF' | 'H' | '';
+import { useAuthStore } from '@/stores/auth-store';
+import { useSeriesStore } from '@/stores/series-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
+import { buildDoodMatrix } from '@/lib/schedule/dood-matrix';
+import type { DOODStatus } from '@/lib/schedule/dood-matrix';
+import { LineProducerPanel } from '@/components/LineProducerPanel';
+import type { ProjectSnapshot } from '@/components/LineProducerPanel';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 
 const STATUS_COLORS: Record<DOODStatus, { bg: string; text: string }> = {
     W: { bg: 'bg-lemon-cyan/20', text: 'text-lemon-cyan' },
@@ -26,61 +32,42 @@ export function DOODsPage() {
     const { id: projectId } = useParams<{ id: string }>();
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
 
-    // Build the DOODs matrix
+    const [searchParams] = useSearchParams();
+    const seriesId = searchParams.get('seriesId');
+    const user = useAuthStore((s) => s.user);
+    const { rosterEntries, loadRoster } = useSeriesStore();
+
+    useEffect(() => {
+        if (!seriesId || !user?.uid) return;
+        loadRoster(user.uid, seriesId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seriesId, user?.uid]);
+
+    // Build the DOODs matrix using shared utility
     const { characters, matrix, totalDays } = useMemo(() => {
-        if (!schedule) return { characters: [], matrix: new Map(), totalDays: 0 };
-
-        const totalDays = schedule.shootDays.length;
-
-        // Collect all characters and which days they appear in
-        const charDays = new Map<string, Set<number>>();
-        for (const day of schedule.shootDays) {
-            for (const strip of day.strips) {
-                for (const char of strip.characters) {
-                    const key = char.toUpperCase().trim();
-                    if (!charDays.has(key)) charDays.set(key, new Set());
-                    charDays.get(key)!.add(day.dayNumber);
-                }
-            }
-        }
-
-        // Sort characters by number of working days (descending)
-        const characters = [...charDays.entries()]
-            .sort((a, b) => b[1].size - a[1].size)
-            .map(([name]) => name);
-
-        // Build status matrix
-        const matrix = new Map<string, DOODStatus[]>();
-        for (const char of characters) {
-            const workingDays = charDays.get(char)!;
-            const dayNumbers = [...workingDays].sort((a, b) => a - b);
-            const firstDay = dayNumbers[0]!;
-            const lastDay = dayNumbers[dayNumbers.length - 1]!;
-
-            const statuses: DOODStatus[] = [];
-            for (let d = 1; d <= totalDays; d++) {
-                if (!workingDays.has(d)) {
-                    // If between first and last working day, it's a hold
-                    if (d > firstDay && d < lastDay) {
-                        statuses.push('H');
-                    } else {
-                        statuses.push('');
-                    }
-                } else if (firstDay === lastDay && d === firstDay) {
-                    statuses.push('SWF'); // Single day
-                } else if (d === firstDay) {
-                    statuses.push('SW');
-                } else if (d === lastDay) {
-                    statuses.push('WF');
-                } else {
-                    statuses.push('W');
-                }
-            }
-            matrix.set(char, statuses);
-        }
-
-        return { characters, matrix, totalDays };
+        if (!schedule) return { characters: [], matrix: new Map<string, DOODStatus[]>(), totalDays: 0 };
+        return buildDoodMatrix(schedule);
     }, [schedule]);
+
+    const seriesRegularNames = useMemo(
+        () =>
+            new Set(
+                rosterEntries
+                    .filter((e) => e.isSeriesRegular)
+                    .map((e) => e.name.toUpperCase().trim())
+            ),
+        [rosterEntries]
+    );
+
+    const breakdowns = useBreakdownStore((s) => s.breakdowns);
+    const [lpOpen, setLpOpen] = useState(true);
+    const [adPanelOpen, setAdPanelOpen] = useState(false);
+    const lpSnapshot: ProjectSnapshot = {
+        projectId: projectId ?? '',
+        scenes: [],
+        breakdowns,
+        activeSceneNumber: null,
+    };
 
     if (!projectId) {
         return (
@@ -109,7 +96,9 @@ export function DOODsPage() {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full">
+            <div className="flex flex-col flex-1 min-w-0">
+            <EpisodeBreadcrumb />
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -130,6 +119,19 @@ export function DOODsPage() {
                     <div className="text-lemon-text-muted">
                         <span className="text-lemon-text-primary font-bold">{totalDays}</span> shoot days
                     </div>
+                    {/* 1ST AD toggle — Rafa is secondary on DOODs */}
+                    <button
+                        onClick={() => setAdPanelOpen((o) => !o)}
+                        title="Open Rafa — AI 1st AD"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-display font-bold uppercase tracking-wider transition-colors ${
+                            adPanelOpen
+                                ? 'bg-lemon-yellow/15 border-lemon-yellow/40 text-lemon-yellow'
+                                : 'bg-lemon-bg-secondary border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-yellow hover:border-lemon-yellow'
+                        }`}
+                    >
+                        <Bot size={12} />
+                        1st AD
+                    </button>
                 </div>
             </header>
 
@@ -196,11 +198,19 @@ export function DOODsPage() {
                                     const statuses = matrix.get(char) ?? [];
                                     const workDays = statuses.filter((s: DOODStatus) => s === 'W' || s === 'SW' || s === 'WF' || s === 'SWF').length;
                                     const holdDays = statuses.filter((s: DOODStatus) => s === 'H').length;
+                                    const isSR = seriesId ? seriesRegularNames.has(char) : false;
 
                                     return (
-                                        <tr key={char} className="hover:bg-lemon-bg-elevated/30 transition-colors">
+                                        <tr key={char} className={`hover:bg-lemon-bg-elevated/30 transition-colors${isSR ? ' bg-lemon-cyan/5' : ''}`}>
                                             <td className="sticky left-0 z-10 bg-lemon-bg-primary px-4 py-1.5 text-xs font-mono text-lemon-text-primary border-b border-r border-lemon-gray-700 truncate max-w-[180px]">
-                                                {char}
+                                                <span className="flex items-center gap-1.5">
+                                                    {char}
+                                                    {isSR && (
+                                                        <span className="font-mono text-[0.5rem] tracking-wider uppercase px-1 py-0.5 rounded border border-lemon-cyan/30 text-lemon-cyan bg-lemon-cyan/5 flex-shrink-0">
+                                                            SR
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </td>
                                             {statuses.map((status: DOODStatus, i: number) => {
                                                 const style = STATUS_COLORS[status];
@@ -227,6 +237,26 @@ export function DOODsPage() {
                     </div>
                 )}
             </div>
+        </div>
+            {/* ── Sandra (Line Producer) panel — PRIMARY ── */}
+            <LineProducerPanel
+                context={null}
+                snapshot={lpSnapshot}
+                isOpen={lpOpen}
+                onToggle={() => setLpOpen((o) => !o)}
+                side="left"
+                isPrimary={true}
+            />
+            {/* ── Rafa (1st AD) — secondary, no prompts ── */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={null}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId ?? ''}
+                side="right"
+                isPrimary={false}
+            />
         </div>
     );
 }

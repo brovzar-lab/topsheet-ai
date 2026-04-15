@@ -52,6 +52,10 @@ export interface ScheduleDraft {
     bannerStrips: BannerStrip[];
     /** Target pages per day in 1/8ths (default: 32 = 4 pages) */
     targetPagesPerDay: number;
+    /** Shoot days per week (default: 5 — Mon-Fri) */
+    shootDaysPerWeek: number;
+    /** Target work hours per day (default: 12) */
+    hoursPerDay: number;
     createdAt: string;
     notes?: string;
 }

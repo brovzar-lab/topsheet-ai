@@ -13,23 +13,32 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useSearchParamState } from '@/hooks/useSearchParamState';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import {
-    Zap, Check, AlertTriangle, Circle, Plus, Trash2,
+    Zap, Circle, Plus,
     ChevronRight, KeyRound, FileText, Loader2, StopCircle,
     CheckCircle2, XCircle, RefreshCw, Bot, CheckSquare,
 } from 'lucide-react';
+import { SceneStatusIcon } from '@/components/breakdown/SceneStatusIcon';
+import { ElementGrid } from '@/components/breakdown/ElementGrid';
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useBudgetStore } from '@/stores/budget-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { ELEMENT_CATEGORIES, getCategoryById } from '@/data/element-categories';
-import { createBreakdownModel } from '@/lib/ai/gemini-client';
+import { useScheduleStore } from '@/stores/schedule-store';
+import { ELEMENT_CATEGORIES } from '@/data/element-categories';
+import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
 import { processBreakdownBatch } from '@/lib/ai/batch-processor';
 import type { BatchProgress, FailedScene } from '@/lib/ai/batch-processor';
 import type { BreakdownElement, ElementCategoryId } from '@/types';
 import { LineProducerPanel } from '@/components/LineProducerPanel';
 import type { LineProducerContext, ProjectSnapshot } from '@/components/LineProducerPanel';
-import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
+import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
 
 // -----------------------------------------------------------------------
 // Main component
@@ -40,7 +49,8 @@ const EMPTY_SCENES: import('@/types').Scene[] = [];
 const ERROR_TYPE_LABELS: Record<string, { label: string; color: string }> = {
     quota: { label: 'QUOTA', color: '#f59e0b' },
     auth:  { label: 'AUTH',  color: '#ef4444' },
-    parse: { label: 'PARSE', color: '#8b5cf6' },
+    parse: { label: 'PARSE', color: '#06b6d4' },
+    content_filter: { label: 'CONTENT FILTER', color: '#f97316' },
     unknown: { label: 'ERROR', color: '#6b7280' },
 };
 
@@ -50,8 +60,8 @@ export function BreakdownPage() {
     const { breakdowns, setBreakdown, addElement, removeElement, markReviewed, markAllReviewed, copyElementToScenes } = useBreakdownStore();
     const apiKey = useSettingsStore((s) => s.geminiApiKey);
 
-    const [selectedScene, setSelectedScene] = useState<string | null>(
-        scenes[0]?.sceneNumber ?? null,
+    const [selectedScene, setSelectedScene] = useSearchParamState(
+        'scene', scenes[0]?.sceneNumber ?? null,
     );
     const [progress, setProgress] = useState<BatchProgress | null>(null);
     const [isRunning, setIsRunning] = useState(false);
@@ -67,16 +77,25 @@ export function BreakdownPage() {
     const [newElementName, setNewElementName] = useState('');
     const [newElementCategory, setNewElementCategory] = useState<ElementCategoryId>('props');
 
+    // -- Schedule store (for Rafa on this page) --
+    const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
+
     // -- Line Producer panel --
-    const [lpOpen, setLpOpen] = useState(false);
+    const [lpOpen, setLpOpen] = useState(false);   // secondary — starts collapsed
     const [lpContext, setLpContext] = useState<LineProducerContext | null>(null);
+
+    // -- Assistant Director panel (visible on Breakdown page too) --
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
+
+    // -- Figure It Out brainstorm modal --
+    const [brainstormOpen, setBrainstormOpen] = useState(false);
 
     // ---------------------------------------------------------------
     // Run AI breakdown
     // ---------------------------------------------------------------
 
     const runBreakdown = useCallback(async () => {
-        if (!apiKey || isRunning || scenes.length === 0) return;
+        if (isRunning || scenes.length === 0) return;
 
         const controller = new AbortController();
         abortRef.current = controller;
@@ -84,13 +103,13 @@ export function BreakdownPage() {
         setFailures([]);
 
         try {
-            const model = createBreakdownModel(apiKey);
             const scenesToProcess = sceneCap > 0 ? scenes.slice(0, sceneCap) : scenes;
+            const rafaSkillContext = useAgentBrainStore.getState().getRafaSkillContext();
             const result = await processBreakdownBatch(
-                model,
                 scenesToProcess,
                 (p) => setProgress(p),
                 controller.signal,
+                rafaSkillContext || undefined,
             );
 
             for (const bd of result.succeeded) {
@@ -103,7 +122,7 @@ export function BreakdownPage() {
             setIsRunning(false);
             abortRef.current = null;
         }
-    }, [apiKey, isRunning, scenes, sceneCap, setBreakdown]);
+    }, [isRunning, scenes, sceneCap, setBreakdown]);
 
     const stopBreakdown = useCallback(() => {
         abortRef.current?.abort();
@@ -114,15 +133,12 @@ export function BreakdownPage() {
     // ---------------------------------------------------------------
 
     const retryScene = useCallback(async (failed: FailedScene) => {
-        if (!apiKey) return;
         const scene = scenes.find((s) => s.sceneNumber === failed.sceneNumber);
         if (!scene) return;
 
         setRetrying((prev) => new Set(prev).add(failed.sceneNumber));
         try {
-            const model = createBreakdownModel(apiKey);
             const elements = await generateSceneBreakdown(
-                model,
                 scene.sceneNumber,
                 scene.content,
                 scene.slugline.raw,
@@ -156,9 +172,6 @@ export function BreakdownPage() {
         setLpOpen(true);
     }, []);
 
-    // ---------------------------------------------------------------
-    // Add manual element
-    // ---------------------------------------------------------------
 
     const handleAddElement = useCallback(() => {
         if (!selectedScene || !newElementName.trim()) return;
@@ -186,14 +199,31 @@ export function BreakdownPage() {
     );
     const unreviewedCount = Object.values(breakdowns).filter((bd) => !bd.reviewed).length;
 
-    // Snapshot passed to Line Producer — gives Margo full script + breakdown + budget awareness
+    // Snapshot passed to Line Producer — gives Sandra full script + breakdown + budget awareness
     const latestBudget = projectId ? useBudgetStore.getState().getLatestDraft(projectId) : undefined;
+    const currentProject = projectId ? useProjectStore.getState().projects.find(p => p.id === projectId) : undefined;
     const projectSnapshot: ProjectSnapshot = {
         projectId: projectId ?? '',
         scenes,
         breakdowns,
         activeSceneNumber: selectedScene,
         budget: latestBudget ?? null,
+        territory: currentProject?.territory ?? null,
+    };
+
+    // Schedule snapshot for Rafa — always created; schedule is optional but scenes are always injected
+    const adSnapshot: ScheduleSnapshot = {
+        projectId: projectId ?? '',
+        schedule: schedule ?? undefined,
+        breakdowns,
+        activeDayNumber: null,
+        territory: currentProject?.territory ?? null,
+        scenes: scenes.map((sc) => ({
+            sceneNumber: sc.sceneNumber,
+            slugline: sc.slugline,
+            content: sc.content,
+            pageCount: sc.pageCount,
+        })),
     };
 
     // ---------------------------------------------------------------
@@ -236,6 +266,10 @@ export function BreakdownPage() {
     // ---------------------------------------------------------------
 
     return (
+        <>
+        {/* ── Brainstorm modal ── */}
+        {brainstormOpen && <BrainstormPanel onClose={() => setBrainstormOpen(false)} />}
+
         <div className="flex h-full">
             {/* ============ SCENE SIDEBAR ============ */}
             <aside className="w-64 border-r border-lemon-gray-700 bg-lemon-bg-secondary/50 overflow-y-auto flex-shrink-0">
@@ -286,6 +320,7 @@ export function BreakdownPage() {
 
             {/* ============ MAIN CONTENT ============ */}
             <div className="flex-1 overflow-y-auto p-6 min-w-0">
+                <EpisodeBreadcrumb />
                 {/* Header */}
                 <div className="mb-6 flex items-start justify-between gap-4">
                     <div>
@@ -354,6 +389,7 @@ export function BreakdownPage() {
                             Max
                         </label>
                         <input
+                            aria-label="Maximum scenes to analyze"
                             type="number"
                             min={0}
                             max={scenes.length}
@@ -365,6 +401,7 @@ export function BreakdownPage() {
 
                     {!isRunning ? (
                         <button
+                            data-testid="breakdown-run-button"
                             onClick={runBreakdown}
                             disabled={!apiKey || scenes.length === 0}
                             className="flex items-center gap-2 px-5 py-2.5 bg-lemon-cyan text-lemon-black font-display font-bold uppercase text-sm rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -400,6 +437,11 @@ export function BreakdownPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Figure It Out */}
+                    <div className="ml-auto flex-shrink-0">
+                        <FigureItOutButton onClick={() => setBrainstormOpen(true)} />
+                    </div>
                 </div>
 
                 {/* ── Failures ─────────────────────────────────── */}
@@ -505,6 +547,7 @@ export function BreakdownPage() {
                                         {currentBreakdown.elements.length} ELEMENTS
                                     </span>
                                     <button
+                                        data-testid="add-element-button"
                                         onClick={() => setShowAddModal(true)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-lemon-text-muted hover:text-lemon-cyan border border-lemon-gray-700 rounded hover:border-lemon-cyan transition-colors"
                                     >
@@ -553,6 +596,7 @@ export function BreakdownPage() {
 
                             <label className="block text-xs text-lemon-text-muted mb-1">Name</label>
                             <input
+                                aria-label="New element name"
                                 type="text"
                                 value={newElementName}
                                 onChange={(e) => setNewElementName(e.target.value)}
@@ -582,187 +626,29 @@ export function BreakdownPage() {
                 )}
             </div>
 
-            {/* ============ LINE PRODUCER PANEL ============ */}
+            {/* ============ ASSISTANT DIRECTOR PANEL — left (owns breakdown) ============ */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={adSnapshot}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId ?? ''}
+                side="left"
+                pageMode="breakdown"
+                isPrimary={true}
+            />
+
+            {/* ============ LINE PRODUCER PANEL — right (support on breakdown) ============ */}
             <LineProducerPanel
                 context={lpContext}
                 snapshot={projectSnapshot}
                 isOpen={lpOpen}
                 onToggle={() => setLpOpen((o) => !o)}
+                side="right"
+                isPrimary={false}
             />
         </div>
+        </>
     );
 }
 
-// -----------------------------------------------------------------------
-// Sub-components
-// -----------------------------------------------------------------------
-
-function SceneStatusIcon({ status }: { status: 'reviewed' | 'done' | 'pending' | 'error' }) {
-    switch (status) {
-        case 'reviewed':
-            return <Check size={14} className="text-lemon-cyan flex-shrink-0" />;
-        case 'done':
-            return <AlertTriangle size={14} className="text-lemon-yellow flex-shrink-0" />;
-        case 'error':
-            return <XCircle size={14} className="text-lemon-coral flex-shrink-0" />;
-        case 'pending':
-            return <Circle size={14} className="text-lemon-gray-600 flex-shrink-0" />;
-    }
-}
-
-function ElementGrid({
-    elements,
-    onRemove,
-    allSceneNumbers,
-    currentSceneNumber,
-    onCopyToScenes,
-}: {
-    elements: BreakdownElement[];
-    onRemove: (id: string) => void;
-    allSceneNumbers: string[];
-    currentSceneNumber: string;
-    onCopyToScenes: (element: BreakdownElement, targetScenes: string[]) => void;
-}) {
-    const [copyElement, setCopyElement] = useState<BreakdownElement | null>(null);
-    const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
-    // Group by category
-    const grouped = new Map<ElementCategoryId, BreakdownElement[]>();
-    for (const el of elements) {
-        if (!grouped.has(el.categoryId)) grouped.set(el.categoryId, []);
-        grouped.get(el.categoryId)!.push(el);
-    }
-
-    // Sort by category number
-    const sorted = Array.from(grouped.entries()).sort((a, b) => {
-        const catA = getCategoryById(a[0]);
-        const catB = getCategoryById(b[0]);
-        return (catA?.number ?? 99) - (catB?.number ?? 99);
-    });
-
-    return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {sorted.map(([categoryId, catElements]) => {
-                const cat = getCategoryById(categoryId);
-                if (!cat) return null;
-
-                return (
-                    <div
-                        key={categoryId}
-                        className="border rounded-lg overflow-hidden"
-                        style={{ borderColor: cat.color + '40' }}
-                    >
-                        {/* Category header */}
-                        <div
-                            className="px-3 py-1.5 flex items-center gap-2"
-                            style={{ backgroundColor: cat.color + '15' }}
-                        >
-                            <div
-                                className="w-2.5 h-2.5 rounded-full"
-                                style={{ backgroundColor: cat.color }}
-                            />
-                            <span
-                                className="text-xs font-display font-bold uppercase tracking-wider"
-                                style={{ color: cat.color }}
-                            >
-                                {cat.name}
-                            </span>
-                            <span className="ml-auto text-xs text-lemon-text-muted">
-                                {catElements.length}
-                            </span>
-                        </div>
-
-                        {/* Elements */}
-                        <div className="divide-y divide-lemon-gray-800">
-                            {catElements.map((el) => (
-                                <div
-                                    key={el.id}
-                                    className="px-3 py-2 bg-lemon-bg-secondary/50 group flex items-start gap-2"
-                                >
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-lemon-text-primary truncate">
-                                            {el.name}
-                                            {el.quantity && el.quantity > 1 && (
-                                                <span className="ml-1 text-xs text-lemon-text-muted">
-                                                    ×{el.quantity}
-                                                </span>
-                                            )}
-                                        </p>
-                                        {el.description && (
-                                            <p className="text-xs text-lemon-text-muted truncate">
-                                                {el.description}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() => onRemove(el.id)}
-                                        className="opacity-0 group-hover:opacity-100 text-lemon-gray-500 hover:text-lemon-coral transition-all"
-                                        title="Remove"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setCopyElement(el);
-                                            setSelectedTargets(new Set());
-                                        }}
-                                        className="opacity-0 group-hover:opacity-100 text-lemon-gray-500 hover:text-lemon-cyan transition-all"
-                                        title="Copy to other scenes"
-                                    >
-                                        <Plus size={12} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            })}
-
-            {/* Copy to Scenes Modal */}
-            {copyElement && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setCopyElement(null)}>
-                    <div className="w-80 max-h-96 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg p-4" onClick={(e) => e.stopPropagation()}>
-                        <h4 className="text-sm text-lemon-text-primary font-display font-bold mb-1">Copy "{copyElement.name}"</h4>
-                        <p className="text-[0.6rem] text-lemon-text-muted mb-3">Select target scenes:</p>
-                        <div className="max-h-52 overflow-y-auto space-y-1 mb-3">
-                            {allSceneNumbers
-                                .filter((s) => s !== currentSceneNumber)
-                                .map((sceneNum) => (
-                                    <label key={sceneNum} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-lemon-bg-elevated/50 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedTargets.has(sceneNum)}
-                                            onChange={() => {
-                                                setSelectedTargets((prev) => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(sceneNum)) next.delete(sceneNum);
-                                                    else next.add(sceneNum);
-                                                    return next;
-                                                });
-                                            }}
-                                            className="accent-lemon-cyan"
-                                        />
-                                        <span className="text-xs font-mono text-lemon-text-body">Scene {sceneNum}</span>
-                                    </label>
-                                ))}
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                            <button onClick={() => setCopyElement(null)} className="px-3 py-1 text-xs text-lemon-text-muted hover:text-lemon-text-primary">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    onCopyToScenes(copyElement, [...selectedTargets]);
-                                    setCopyElement(null);
-                                }}
-                                disabled={selectedTargets.size === 0}
-                                className="px-3 py-1 bg-lemon-cyan text-lemon-black font-bold text-xs rounded disabled:opacity-30"
-                            >
-                                Copy to {selectedTargets.size} scene{selectedTargets.size !== 1 ? 's' : ''}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}

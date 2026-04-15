@@ -1,16 +1,26 @@
 /**
- * gemini-client.ts — Thin wrapper around @google/generative-ai
+ * gemini-client.ts — AI-powered screenplay analysis and breakdown extraction.
+ *
+ * All LLM calls route through the proxy (proxyClient.ts → Cloud Function → LiteLLM).
+ * API keys never touch the browser.
  *
  * Provides:
- *  - createBreakdownModel(): initialises Gemini with the right settings
- *  - generateSceneBreakdown(): calls the model and parses JSON into BreakdownElement[]
  *  - analyzeScript(): fast initial extraction — title, genre, logline, synopsis
+ *  - generateSceneBreakdown(): breakdown extraction for a single scene
  */
 
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
-import type { GenerativeModel } from '@google/generative-ai';
 import type { BreakdownElement } from '@/types';
 import { buildBreakdownPrompt, validateElement } from './prompts/breakdown';
+import { callLLM } from './proxyClient';
+import { useSettingsStore } from '@/stores/settings-store';
+
+// -----------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------
+
+const SCRIPT_SAMPLE_CHARS = 12_000;  // ~10 pages, enough for title/genre/premise
+const ANALYSIS_TIMEOUT_MS = 30_000;
+const RETRY_DELAY_MS = 2_000;
 
 // -----------------------------------------------------------------------
 // Script Analysis (initial upload card)
@@ -36,26 +46,12 @@ export interface ScriptAnalysis {
  * (roughly 10 pages) to extract metadata without burning tokens.
  */
 export async function analyzeScript(
-    apiKey: string,
     scriptText: string,
     sceneCount: number,
     pageCount: number,
     filenameTitle: string,
 ): Promise<ScriptAnalysis> {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
-    });
-
-    // Use first 12 000 chars — enough context to detect title, genre, and premise
-    const sample = scriptText.slice(0, 12000);
+    const sample = scriptText.slice(0, SCRIPT_SAMPLE_CHARS);
 
     const prompt = `You are a professional script reader. Analyze this screenplay excerpt and return ONLY valid JSON.
 
@@ -84,8 +80,19 @@ Rules:
 - topLocations: up to 4 most prominent location names from sluglines
 - tone: 2-4 lowercase mood/atmosphere words (e.g. "tense", "comedic", "melancholic")`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim()
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('analyzeScript timeout')), ANALYSIS_TIMEOUT_MS)
+    );
+
+    const resultPromise = callLLM({
+        model: useSettingsStore.getState().getModelForRole('scriptAnalysis'),
+        prompt,
+        jsonMode: true,
+        temperature: 0.3,
+    });
+
+    const result = await Promise.race([resultPromise, timeoutPromise]);
+    const text = result.text.trim()
         .replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
 
     try {
@@ -111,74 +118,50 @@ Rules:
 }
 
 // -----------------------------------------------------------------------
-// Model factory
-// -----------------------------------------------------------------------
-
-const MODEL_NAME = 'gemini-2.5-flash';
-
-/**
- * Create a Gemini model tuned for structured breakdown extraction.
- */
-export function createBreakdownModel(apiKey: string): GenerativeModel {
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    return genAI.getGenerativeModel({
-        model: MODEL_NAME,
-        generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.2,      // low creativity — we want factual extraction
-            maxOutputTokens: 4096,
-        },
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
-    });
-}
-
-// -----------------------------------------------------------------------
 // Breakdown generation
 // -----------------------------------------------------------------------
 
-let _idCounter = 0;
 function nextId(): string {
-    return `el_${Date.now()}_${++_idCounter}`;
+    return `el_${crypto.randomUUID()}`;
 }
 
 /**
- * Run a Gemini breakdown call on a single scene.
+ * Run a breakdown call on a single scene via the proxy.
  * Returns cleaned BreakdownElement[] with generated IDs.
  *
  * Retries once on 429 / 500 with exponential backoff.
  */
 export async function generateSceneBreakdown(
-    model: GenerativeModel,
     sceneNumber: string,
     sceneContent: string,
     sluglineRaw: string,
+    skillContext?: string,
 ): Promise<BreakdownElement[]> {
-    const { systemPrompt, userPrompt } = buildBreakdownPrompt(sceneNumber, sceneContent, sluglineRaw);
+    const { systemPrompt, userPrompt } = buildBreakdownPrompt(sceneNumber, sceneContent, sluglineRaw, skillContext);
 
     let lastError: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
-            const result = await model.generateContent({
-                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                systemInstruction: { role: 'model', parts: [{ text: systemPrompt }] },
+            const result = await callLLM({
+                model: useSettingsStore.getState().getModelForRole('sceneBreakdown'),
+                systemPrompt,
+                prompt: userPrompt,
+                jsonMode: true,
+                temperature: 0.2,
+                maxTokens: 4096,
             });
 
-            const text = result.response.text();
-            return parseBreakdownResponse(text);
+            return parseBreakdownResponse(result.text);
         } catch (err: unknown) {
             lastError = err;
-            const status = (err as { status?: number })?.status;
-            if (attempt === 0 && (status === 429 || status === 500)) {
-                // Wait 2s before retry
-                await sleep(2000);
+            const message = err instanceof Error ? err.message : String(err);
+
+            // Retry on rate-limit or server error
+            if (attempt === 0 && (message.includes('429') || message.includes('500') || message.includes('503'))) {
+                await sleep(RETRY_DELAY_MS);
                 continue;
             }
+
             throw err;
         }
     }
@@ -191,7 +174,7 @@ export async function generateSceneBreakdown(
 // -----------------------------------------------------------------------
 
 /**
- * Parse Gemini's JSON text into BreakdownElement[].
+ * Parse JSON text into BreakdownElement[].
  * Handles common LLM quirks: markdown fences, extra whitespace, partial objects.
  */
 function parseBreakdownResponse(text: string): BreakdownElement[] {

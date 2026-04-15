@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Upload, AlertTriangle, CheckCircle, Loader2,
+    Upload, AlertTriangle, Loader2,
     ShieldCheck, ShieldAlert, ArrowRight, MapPin,
     Sparkles, Film, RefreshCw,
 } from 'lucide-react';
@@ -12,7 +12,9 @@ import type { ScriptAnalysis } from '@/lib/ai/gemini-client';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import type { ProductionTier, PrimaryLocation } from '@/types';
+import type { ProductionTier } from '@/types';
+import type { ProductionTerritory } from '@/lib/territory-knowledge';
+import { TERRITORY_LABELS } from '@/lib/territory-knowledge';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +45,7 @@ interface ParsedData {
 
 export function ProjectNewPage() {
     const navigate = useNavigate();
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const addProject = useProjectStore((s) => s.addProject);
     const setScenes = useSceneStore((s) => s.setScenes);
@@ -51,7 +54,7 @@ export function ProjectNewPage() {
     // Optional project metadata (can be overridden from AI result)
     const [title, setTitle] = useState('');
     const [tier, setTier] = useState<ProductionTier>('mid');
-    const [location, setLocation] = useState<PrimaryLocation>('cdmx');
+    const [territory, setTerritory] = useState<ProductionTerritory>('mexico');
 
     const [step, setStep] = useState<Step>('idle');
     const [progress, setProgress] = useState('');
@@ -104,13 +107,12 @@ export function ProjectNewPage() {
             };
             setParsed(data);
 
-            // Step 3 — AI analysis (if key available)
-            if (apiKey) {
+            // Step 3 — AI analysis via proxy
+            {
                 setStep('analyzing');
                 setProgress('Reading your screenplay…');
                 try {
                     const result = await analyzeScript(
-                        apiKey,
                         pdfResult.text,
                         data.sceneCount,
                         data.totalPages,
@@ -163,7 +165,8 @@ export function ProjectNewPage() {
             id: projectId,
             title: finalTitle,
             tier,
-            location,
+            location: 'cdmx', // legacy field kept for compat
+            territory,
             scriptText: parsed.scriptText,
             totalPages: parsed.totalPages,
             sceneCount: parsed.sceneCount,
@@ -173,8 +176,9 @@ export function ProjectNewPage() {
         });
 
         setScenes(projectId, parsed.scenes);
+
         navigate(`/project/${projectId}/breakdown`);
-    }, [parsed, title, tier, location, addProject, setScenes, navigate]);
+    }, [parsed, title, tier, territory, addProject, setScenes, navigate]);
 
     const handleReset = useCallback(() => {
         setStep('idle');
@@ -200,7 +204,7 @@ export function ProjectNewPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <h1 className="mb-2">New Project</h1>
+            <h1 className="mb-2">Feature Film</h1>
             <p className="text-lemon-text-muted font-body text-sm mb-8">
                 Drop a screenplay PDF. We'll read it and confirm before starting the breakdown.
             </p>
@@ -208,6 +212,40 @@ export function ProjectNewPage() {
             {/* ── CONFIRM CARD ─────────────────────────────────────────── */}
             {step === 'confirm' && parsed && (
                 <div className="space-y-5">
+                    {/* Project metadata strip — compact, at the top */}
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-lemon-bg-secondary/40 border border-lemon-gray-700 rounded-lg text-[0.65rem] font-mono tracking-wider uppercase flex-wrap">
+                        <span className="text-lemon-text-muted">Project Details</span>
+                        <span className="text-lemon-gray-600">·</span>
+                        <input
+                            aria-label="Project title"
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="bg-transparent text-lemon-text-primary font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none border-b border-transparent focus:border-lemon-cyan transition-colors min-w-0 w-40"
+                            placeholder="Title"
+                        />
+                        <span className="text-lemon-gray-600">·</span>
+                        <select
+                            value={tier}
+                            onChange={(e) => setTier(e.target.value as ProductionTier)}
+                            className="bg-transparent text-lemon-text-muted font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none cursor-pointer hover:text-lemon-text-primary transition-colors"
+                        >
+                            <option value="low">Low Tier</option>
+                            <option value="mid">Mid Tier</option>
+                            <option value="premium">Premium Tier</option>
+                        </select>
+                        <span className="text-lemon-gray-600">·</span>
+                        <select
+                            value={territory}
+                            onChange={(e) => setTerritory(e.target.value as ProductionTerritory)}
+                            className="bg-transparent text-lemon-text-muted font-mono text-[0.65rem] tracking-wider uppercase focus:outline-none cursor-pointer hover:text-lemon-text-primary transition-colors"
+                        >
+                            {(Object.entries(TERRITORY_LABELS) as [ProductionTerritory, string][]).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* AI Analysis Card */}
                     {analysis && (
                         <div className="border border-lemon-cyan/30 rounded-xl bg-lemon-bg-secondary/60 overflow-hidden">
@@ -320,51 +358,10 @@ export function ProjectNewPage() {
                         </div>
                     </div>
 
-                    {/* Project metadata (editable before confirming) */}
-                    <div className="border border-lemon-gray-700 rounded-xl bg-lemon-bg-secondary/40 px-6 py-4">
-                        <span className="lemon-label block mb-3">PROJECT DETAILS</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="sm:col-span-1">
-                                <label className="lemon-label block mb-1.5">TITLE</label>
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="lemon-label block mb-1.5">TIER</label>
-                                <select
-                                    value={tier}
-                                    onChange={(e) => setTier(e.target.value as ProductionTier)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                >
-                                    <option value="low">Low (MXN 2–10M)</option>
-                                    <option value="mid">Mid (MXN 10–30M)</option>
-                                    <option value="premium">Premium (MXN 30M+)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="lemon-label block mb-1.5">LOCATION</label>
-                                <select
-                                    value={location}
-                                    onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
-                                    className="w-full px-3 py-2.5 bg-lemon-bg-primary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                                >
-                                    <option value="cdmx">CDMX</option>
-                                    <option value="guadalajara">Guadalajara</option>
-                                    <option value="monterrey">Monterrey</option>
-                                    <option value="tijuana">Tijuana</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Action buttons */}
                     <div className="flex items-center gap-4">
                         <button
+                            data-testid="run-breakdown-button"
                             onClick={handleConfirm}
                             className="flex items-center gap-2 px-7 py-3 bg-lemon-cyan text-lemon-black font-display font-bold text-sm uppercase tracking-wider rounded hover:bg-lemon-cyan-dim transition-colors"
                         >
@@ -391,6 +388,8 @@ export function ProjectNewPage() {
                             <div className="sm:col-span-1">
                                 <label className="lemon-label block mb-2">TITLE (optional)</label>
                                 <input
+                                    data-testid="project-title-input"
+                                    aria-label="Project title"
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
@@ -411,23 +410,22 @@ export function ProjectNewPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="lemon-label block mb-2">LOCATION</label>
+                                <label className="lemon-label block mb-2">SHOOTING TERRITORY</label>
                                 <select
-                                    value={location}
-                                    onChange={(e) => setLocation(e.target.value as PrimaryLocation)}
+                                    value={territory}
+                                    onChange={(e) => setTerritory(e.target.value as ProductionTerritory)}
                                     className="w-full px-4 py-3 bg-lemon-bg-secondary border border-lemon-gray-700 rounded text-lemon-text-primary font-body text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
                                 >
-                                    <option value="cdmx">CDMX</option>
-                                    <option value="guadalajara">Guadalajara</option>
-                                    <option value="monterrey">Monterrey</option>
-                                    <option value="tijuana">Tijuana</option>
-                                    <option value="other">Other</option>
+                                    {(Object.entries(TERRITORY_LABELS) as [ProductionTerritory, string][]).map(([k, v]) => (
+                                        <option key={k} value={k}>{v}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
                     )}
 
                     <div
+                        data-testid="pdf-upload-zone"
                         onDrop={onDrop}
                         onDragOver={(e) => e.preventDefault()}
                         onClick={() => !isProcessing && fileInputRef.current?.click()}
@@ -441,6 +439,7 @@ export function ProjectNewPage() {
                                     : 'border-lemon-gray-700 hover:border-lemon-cyan/40'}`}
                     >
                         <input
+                            aria-label="Upload PDF screenplay"
                             ref={fileInputRef}
                             type="file"
                             accept=".pdf"
@@ -477,12 +476,7 @@ export function ProjectNewPage() {
                         )}
                     </div>
 
-                    {/* No API key warning */}
-                    {step === 'idle' && !apiKey && (
-                        <p className="mt-4 text-xs text-lemon-yellow/70 font-mono">
-                            ⚠ No Gemini API key — AI synopsis will be skipped. Add VITE_GEMINI_API_KEY to .env.local
-                        </p>
-                    )}
+                    {/* AI calls route through proxy — no client-side key needed */}
                 </>
             )}
         </div>

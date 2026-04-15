@@ -1,11 +1,10 @@
 /**
- * batch-processor.ts — Process screenplay scenes through Gemini in sequence.
+ * batch-processor.ts — Process screenplay scenes through LLM proxy in sequence.
  *
  * Sends scenes one at a time with a configurable delay between calls
  * to respect rate limits. Reports progress via callback.
  */
 
-import type { GenerativeModel } from '@google/generative-ai';
 import type { Scene, SceneBreakdown } from '@/types';
 import { generateSceneBreakdown } from './gemini-client';
 
@@ -22,7 +21,7 @@ export interface BatchProgress {
 
 export type ProgressCallback = (progress: BatchProgress) => void;
 
-export type ErrorType = 'quota' | 'auth' | 'parse' | 'unknown';
+export type ErrorType = 'quota' | 'auth' | 'parse' | 'content_filter' | 'unknown';
 
 export interface FailedScene {
     sceneNumber: string;
@@ -43,7 +42,7 @@ export interface BatchResult {
 // Configuration
 // -----------------------------------------------------------------------
 
-/** Delay between API calls in ms (Gemini free-tier: 15 RPM → 4s safe) */
+/** Delay between API calls in ms (rate limiting: 15 RPM → 4s safe) */
 const INTER_CALL_DELAY_MS = 4000;
 
 // -----------------------------------------------------------------------
@@ -51,28 +50,27 @@ const INTER_CALL_DELAY_MS = 4000;
 // -----------------------------------------------------------------------
 
 /**
- * Process an array of scenes through Gemini for breakdown extraction.
+ * Process an array of scenes through the LLM proxy for breakdown extraction.
  *
  * Scenes are processed sequentially with a delay between calls.
  * Failures are logged and skipped — processing continues.
  *
- * @param model - Gemini model instance (from createBreakdownModel)
  * @param scenes - Parsed scene array
  * @param onProgress - Callback fired after each scene
  * @param signal - Optional AbortSignal to cancel the batch
+ * @param skillContext - Optional context for skill-specific prompting
  */
 export async function processBreakdownBatch(
-    model: GenerativeModel,
     scenes: Scene[],
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
+    skillContext?: string,
 ): Promise<BatchResult> {
     const succeeded: SceneBreakdown[] = [];
     const failed: FailedScene[] = [];
     const total = scenes.length;
 
     for (let i = 0; i < scenes.length; i++) {
-        // Check for cancellation
         if (signal?.aborted) break;
 
         const scene = scenes[i]!;
@@ -87,10 +85,10 @@ export async function processBreakdownBatch(
 
         try {
             const elements = await generateSceneBreakdown(
-                model,
                 scene.sceneNumber,
                 scene.content,
                 scene.slugline.raw,
+                skillContext,
             );
 
             succeeded.push({
@@ -100,11 +98,12 @@ export async function processBreakdownBatch(
             });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            const status = (err as { status?: number })?.status;
+            const lowerMsg = message.toLowerCase();
             const errorType: ErrorType =
-                status === 429 ? 'quota'
-                : (status === 401 || status === 403) ? 'auth'
-                : message.toLowerCase().includes('parse') || message.toLowerCase().includes('json') ? 'parse'
+                lowerMsg.includes('prohibited_content') || lowerMsg.includes('content filter blocked') ? 'content_filter'
+                : lowerMsg.includes('429') ? 'quota'
+                : (lowerMsg.includes('401') || lowerMsg.includes('403')) ? 'auth'
+                : lowerMsg.includes('parse') || lowerMsg.includes('json') ? 'parse'
                 : 'unknown';
 
             console.error(`[batch-processor] ✗ ${sceneLabel} [${errorType}]: ${message}`);
@@ -117,8 +116,8 @@ export async function processBreakdownBatch(
             });
 
             // Fail-fast on fatal errors (wrong model, bad API key, etc.)
-            if (status === 404 || status === 401 || status === 403) {
-                console.error(`[batch-processor] Fatal error (${status}), stopping batch`);
+            if (lowerMsg.includes('401') || lowerMsg.includes('403') || lowerMsg.includes('404')) {
+                console.error(`[batch-processor] Fatal error, stopping batch`);
                 for (let j = i + 1; j < scenes.length; j++) {
                     failed.push({
                         sceneNumber: scenes[j]!.sceneNumber,

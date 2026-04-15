@@ -5,25 +5,27 @@
  * Focused on schedule feasibility, page-count targets, cast availability,
  * company moves, and turnaround violations.
  *
- * Architecture mirrors LineProducerPanel.tsx exactly:
- * - Per-day keyed chat history (day:N | __schedule__)
- * - Day / All Days mode tabs
- * - Streaming via Gemini 2.5 Pro
+ * Architecture mirrors LineProducerPanel.tsx:
+ * - Single persistent chat thread (Zustand store — survives page navigation)
+ * - Day / All Days mode tabs control AI context only, not the thread
+ * - LLM calls via proxy client (Gemini 2.5 Flash)
  * - Action buttons with undo for schedule store mutations
+ * - [CROSS_CONSULT] block for querying Sandra
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Bot, Send, Trash2, Copy, CheckCheck, ChevronRight, ChevronLeft,
-    AlertTriangle, CalendarDays, Layers, Zap, Check, RotateCcw,
+    CalendarDays, Layers, Zap, Check, RotateCcw,
+    ArrowRightLeft,
 } from 'lucide-react';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useScheduleStore } from '@/stores/schedule-store';
-import {
-    GoogleGenerativeAI,
-    HarmCategory,
-    HarmBlockThreshold,
-} from '@google/generative-ai';
+import { useChatStore } from '@/stores/chat-store';
+import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { getRafaTerritoryContext } from '@/lib/territory-knowledge';
+import type { ProductionTerritory } from '@/lib/territory-knowledge';
+import { callLLM } from '@/lib/ai/proxyClient';
 import type { ScheduleDraft } from '@/types';
 import type { SceneBreakdown } from '@/types';
 
@@ -35,10 +37,12 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     actions?: RafaAction[];
+    /** Set on cross-agent relay messages produced by consulting Sandra */
+    crossAgent?: { from: 'sandra'; question: string; loading?: boolean };
 }
 
 interface RafaAction {
-    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE';
+    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE' | 'SET_TARGET_PAGES' | 'SET_SCHEDULE_SETTINGS';
     label: string;
     payload: Record<string, unknown>;
 }
@@ -51,29 +55,70 @@ export interface ADPanelContext {
 
 export interface ScheduleSnapshot {
     projectId: string;
-    schedule: ScheduleDraft;
+    /** Full schedule (may be undefined if called from Breakdown/Script pages) */
+    schedule?: ScheduleDraft;
     breakdowns: Record<string, SceneBreakdown>;
     /** Currently focused day number */
     activeDayNumber: number | null;
+    territory?: ProductionTerritory | null;
+    /** Actual parsed scenes from the screenplay — THE SOURCE OF TRUTH for content */
+    scenes?: Array<{
+        sceneNumber: string;
+        slugline: { raw: string; intExt: string; location: string; timeOfDay: string };
+        content: string;
+        pageCount: number;
+    }>;
 }
 
 // -----------------------------------------------------------------------
 // Response parser — splits prose from [ACTIONS]...[/ACTIONS]
 // -----------------------------------------------------------------------
 
-function parseRafaResponse(raw: string): { prose: string; actions: RafaAction[] } {
-    const start = raw.indexOf('[ACTIONS]');
-    const end = raw.indexOf('[/ACTIONS]');
-    if (start === -1 || end === -1 || end < start) {
-        return { prose: raw.trim(), actions: [] };
+interface ParsedRafaResponse {
+    prose: string;
+    actions: RafaAction[];
+    crossConsult: { target: 'sandra'; question: string } | null;
+}
+
+function parseRafaResponse(raw: string): ParsedRafaResponse {
+    let working = raw;
+    let crossConsult: ParsedRafaResponse['crossConsult'] = null;
+
+    // ── Extract [CROSS_CONSULT] block first ──────────────────────────────
+    const ccStart = working.indexOf('[CROSS_CONSULT]');
+    if (ccStart !== -1) {
+        const ccEnd = working.indexOf('[/CROSS_CONSULT]');
+        const ccJson = ccEnd !== -1
+            ? working.slice(ccStart + '[CROSS_CONSULT]'.length, ccEnd)
+            : working.slice(ccStart + '[CROSS_CONSULT]'.length);
+        try {
+            const p = JSON.parse(ccJson.trim()) as { target?: string; question?: string };
+            if (p.target === 'sandra' && p.question) {
+                crossConsult = { target: 'sandra', question: p.question };
+            }
+        } catch { /* malformed — ignore */ }
+        working = (working.slice(0, ccStart) +
+            (ccEnd !== -1 ? working.slice(ccEnd + '[/CROSS_CONSULT]'.length) : '')
+        ).trim();
     }
-    const prose = raw.slice(0, start).trim();
-    const jsonStr = raw.slice(start + 9, end).trim();
+
+    // ── Extract [ACTIONS] block ──────────────────────────────────────────
+    const start = working.indexOf('[ACTIONS]');
+    if (start === -1) return { prose: working.trim(), actions: [], crossConsult };
+
+    const prose = working.slice(0, start).trim();
+
+    // Be tolerant: if [/ACTIONS] is missing, consume to end-of-string
+    const closingTag = working.indexOf('[/ACTIONS]');
+    const jsonStr = closingTag !== -1
+        ? working.slice(start + '[ACTIONS]'.length, closingTag).trim()
+        : working.slice(start + '[ACTIONS]'.length).trim();
+
     try {
         const parsed = JSON.parse(jsonStr) as { actions?: RafaAction[] };
-        return { prose, actions: Array.isArray(parsed.actions) ? parsed.actions : [] };
+        return { prose, actions: Array.isArray(parsed.actions) ? parsed.actions : [], crossConsult };
     } catch {
-        return { prose, actions: [] };
+        return { prose, actions: [], crossConsult };
     }
 }
 
@@ -138,6 +183,20 @@ function executeAction(
             return () => useScheduleStore.getState().setDayDate(projectId, dayId, prevDate);
         }
 
+        case 'SET_TARGET_PAGES': {
+            const { targetPagesPerDay } = action.payload as { targetPagesPerDay: number };
+            const prevTarget = schedule.targetPagesPerDay;
+            store.setTargetPagesPerDay(projectId, targetPagesPerDay);
+            return () => useScheduleStore.getState().setTargetPagesPerDay(projectId, prevTarget);
+        }
+
+        case 'SET_SCHEDULE_SETTINGS': {
+            const settings = action.payload as { shootDaysPerWeek?: number; hoursPerDay?: number };
+            const prevSettings = { shootDaysPerWeek: schedule.shootDaysPerWeek, hoursPerDay: schedule.hoursPerDay };
+            store.setScheduleSettings(projectId, settings);
+            return () => useScheduleStore.getState().setScheduleSettings(projectId, prevSettings);
+        }
+
         default:
             return null;
     }
@@ -150,7 +209,9 @@ function executeAction(
 function buildSystemPrompt(
     snapshot?: ScheduleSnapshot | null,
     ctx?: ADPanelContext | null,
-    chatMode: 'day' | 'schedule' = 'day',
+    chatMode: string = 'day',
+    rafaSkillContext?: string,
+    territory?: ProductionTerritory | null,
 ): string {
     const lines: string[] = [];
 
@@ -158,6 +219,12 @@ function buildSystemPrompt(
         `You are Rafa, a veteran First Assistant Director with 15 years on Mexican features and international co-productions.`,
         `You are embedded in Lemon Budget Engine — a film scheduling and budgeting tool.`,
         `You can see the full stripboard, every shoot day, every scene's elements, and all dates.`,
+        ``,
+        `CRITICAL — ANTI-HALLUCINATION RULE:`,
+        `You ONLY know what is explicitly given to you in this prompt.`,
+        `NEVER invent scenes, locations, characters, stunts, or any content not listed below.`,
+        `If you do not see scene data below, say exactly: "I don't have the script yet — please run the breakdown first."`,
+        `Do NOT describe scenes from your training data or imagination.`,
         ``,
         `Your personality: direct, fast, no sentiment. You care about one thing — making the day.`,
         `You know CONACULTA/IMCINE scheduling norms, Mexican union turnaround rules, and standard page-count targets cold.`,
@@ -194,9 +261,59 @@ function buildSystemPrompt(
         ``,
         `SET_DAY_DATE — set a calendar date on a shoot day:`,
         `  { "type": "SET_DAY_DATE", "label": "Set Day 1 to March 24", "payload": { "dayId": "<day id>", "date": "2025-03-24" } }`,
+        ``,
+        `SET_TARGET_PAGES — change the pages-per-day target (in 1/8ths):`,
+        `  { "type": "SET_TARGET_PAGES", "label": "Set target to 3 pages/day", "payload": { "targetPagesPerDay": 24 } }`,
+        ``,
+        `SET_SCHEDULE_SETTINGS — change schedule working parameters:`,
+        `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 6-day work week", "payload": { "shootDaysPerWeek": 6 } }`,
+        `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 10-hour days", "payload": { "hoursPerDay": 10 } }`,
     );
 
-    // ── Schedule data ──
+    // ── Schedule adjustment intelligence ──
+    lines.push(
+        ``,
+        `SCHEDULE ADJUSTMENT RULES:`,
+        `When the user asks you to change schedule parameters (more days, fewer pages, different work week):`,
+        `1. First explain the impact: how it changes total weeks, daily page load, cast availability, costs.`,
+        `2. If you can make it happen, include the [ACTIONS] block.`,
+        `3. For "more days" or "fewer pages per day" requests, use SET_TARGET_PAGES to lower the target (which means more days when regenerated).`,
+        `4. For "how many weeks" questions: total_weeks = ceil(total_shoot_days / shootDaysPerWeek).`,
+        `5. Convert pages from 1/8ths to full pages for the user (divide by 8). Example: 32 eighths = 4 pages.`,
+        `6. When computing time estimates, account for rest days: calendar_days = shoot_days + ((shoot_days / shootDaysPerWeek) * (7 - shootDaysPerWeek)).`,
+    );
+
+    // ── Scene manifest — injected ALWAYS, even without a schedule ──
+    // This is the script ground truth. Without it Rafa hallucinates.
+    if (snapshot?.scenes && snapshot.scenes.length > 0) {
+        lines.push(`\n--- SCRIPT SCENES (${snapshot.scenes.length} total — THIS IS THE ACTUAL SCREENPLAY, use ONLY this) ---`);
+        for (const sc of snapshot.scenes) {
+            const bd = snapshot.breakdowns[sc.sceneNumber];
+            const elemList = bd?.elements.map(e => `[${e.categoryId}] ${e.name}`).join(', ') || 'no elements tagged yet';
+            const excerpt = sc.content.length > 400
+                ? sc.content.slice(0, 400) + '…'
+                : sc.content;
+            lines.push(
+                `\n  Scene ${sc.sceneNumber}: ${sc.slugline.intExt} ${sc.slugline.location} — ${sc.slugline.timeOfDay} | ${sc.pageCount} pages`,
+                `  Content: ${excerpt.replace(/\n/g, ' ')}`,
+                `  Elements: ${elemList}`,
+            );
+        }
+    } else if (snapshot?.schedule) {
+        // Fallback: no scenes array but we have a schedule — inject from stripboard
+        lines.push(`\n--- SCRIPT (from stripboard — run breakdown for full text) ---`);
+        for (const day of snapshot.schedule.shootDays) {
+            for (const strip of day.strips) {
+                const bd = snapshot.breakdowns[strip.sceneNumber];
+                const elemCount = bd?.elements.length ?? 0;
+                lines.push(`  Scene ${strip.sceneNumber}: ${strip.slugline} [${strip.intExt} ${strip.timeOfDay}] ${(strip.pageCount/8).toFixed(2)}p | cast: ${strip.characters.join(', ') || 'none'} | ${elemCount} elements`);
+            }
+        }
+    } else {
+        lines.push(`\n--- SCRIPT: No scene data loaded yet. Tell the user to upload and parse their screenplay first. DO NOT INVENT SCENES. ---`);
+    }
+
+    // ── Schedule data (only when a schedule exists) ──
     if (snapshot?.schedule) {
         const s = snapshot.schedule;
         const totalPages = s.shootDays.reduce((sum, d) => sum + d.totalPages, 0);
@@ -204,9 +321,11 @@ function buildSystemPrompt(
         const totalDays = s.shootDays.length;
         const totalScenes = s.shootDays.reduce((sum, d) => sum + d.strips.length, 0);
 
-        lines.push(`\n--- SCHEDULE DATA (${chatMode === 'schedule' ? 'full schedule view' : `day ${snapshot.activeDayNumber ?? 'none'} focused`}) ---`);
-        lines.push(`Project: ${snapshot.projectId}`);
+        lines.push(`\n--- SCHEDULE (${chatMode === 'schedule' ? 'full view' : `day ${snapshot.activeDayNumber ?? 'none'} focused`}) ---`);
         lines.push(`${totalDays} shoot days | ${totalScenes} scenes | ${(totalPages / 8).toFixed(1)} total pages | target: ${(targetPPD / 8).toFixed(1)} pages/day`);
+        lines.push(`Work week: ${s.shootDaysPerWeek ?? 5} days/week | ${s.hoursPerDay ?? 12} hours/day`);
+        const estWeeks = Math.ceil(totalDays / (s.shootDaysPerWeek ?? 5));
+        lines.push(`Estimated duration: ~${estWeeks} week${estWeeks !== 1 ? 's' : ''} (${totalDays} shoot days + rest days)`);
 
         lines.push(`\nSHOOT DAY OVERVIEW:`);
         for (const day of s.shootDays) {
@@ -221,7 +340,7 @@ function buildSystemPrompt(
             );
         }
 
-        // Full strip manifest — every strip in every day with IDs (needed for MOVE_STRIP)
+        // Full strip manifest with IDs (needed for MOVE_STRIP actions)
         lines.push(`\nCOMPLETE STRIPBOARD (all days — full detail with IDs):`);
         for (const day of s.shootDays) {
             if (day.strips.length === 0) continue;
@@ -240,19 +359,6 @@ function buildSystemPrompt(
                 );
             }
         }
-
-        // Full element manifest — so Rafa understands logistical complexity per scene
-        lines.push(`\nSCENE ELEMENT MANIFEST (for complexity reasoning):`);
-        for (const day of s.shootDays) {
-            for (const strip of day.strips) {
-                const bd = snapshot.breakdowns[strip.sceneNumber];
-                if (!bd || bd.elements.length === 0) continue;
-                lines.push(`\n  Scene ${strip.sceneNumber} (Day ${day.dayNumber}):`);
-                for (const el of bd.elements) {
-                    lines.push(`    [${el.categoryId}] "${el.name}" qty:${el.quantity ?? 1}${el.notes ? ` // ${el.notes}` : ''}`);
-                }
-            }
-        }
     }
 
     // ── Error/issue context ──
@@ -262,6 +368,14 @@ function buildSystemPrompt(
         lines.push(`Diagnose and suggest fixes. If you can apply them directly, include an [ACTIONS] block.`);
     }
 
+    // ── Territory knowledge ──
+    const territoryCtx = getRafaTerritoryContext(territory ?? snapshot?.territory);
+    if (territoryCtx) lines.push(territoryCtx);
+
+    if (rafaSkillContext) {
+        lines.push('');
+        lines.push(rafaSkillContext);
+    }
     return lines.join('\n');
 }
 
@@ -275,69 +389,121 @@ function getQuickPrompts(snapshot?: ScheduleSnapshot | null): string[] {
     const days = snapshot.schedule.shootDays;
     const heavy = days.filter(d => d.totalPages / 8 > 4.5);
     if (heavy.length > 0) prompts.push(`Which days are overloaded and what should I move?`);
+    prompts.push(`How many weeks will this shoot take? What's the calendar look like?`);
     prompts.push(`Are there any turnaround violations or back-to-back night shoots?`);
     prompts.push(`Which days have company moves and are they grouped efficiently?`);
     prompts.push(`What's the cast availability risk across the schedule?`);
     if (days.some(d => !d.date)) prompts.push(`Help me set calendar dates for the shoot.`);
-    return prompts.slice(0, 4);
+    return prompts.slice(0, 5);
 }
 
-// -----------------------------------------------------------------------
-// ActionButton — apply + undo
-// -----------------------------------------------------------------------
-
+// Controlled ActionButton driven by parent ActionGroup
 function ActionButton({
     action,
-    projectId,
-    schedule,
+    applied,
+    onApply,
+    onUndo,
 }: {
     action: RafaAction;
-    projectId: string;
-    schedule: ScheduleDraft;
+    applied: boolean;
+    onApply: () => void;
+    onUndo: () => void;
 }) {
-    const [state, setState] = useState<'idle' | 'applied'>('idle');
-    const undoFnRef = useRef<(() => void) | null>(null);
-
-    const handleApply = () => {
-        if (state === 'applied') return;
-        const undo = executeAction(action, projectId, schedule);
-        undoFnRef.current = undo;
-        setState('applied');
-    };
-
-    const handleUndo = () => {
-        undoFnRef.current?.();
-        undoFnRef.current = null;
-        setState('idle');
-    };
-
-    const isApplied = state === 'applied';
-    const canUndo = isApplied && undoFnRef.current !== null;
-
     return (
         <div className="flex items-center gap-1.5">
             <button
-                onClick={handleApply}
+                onClick={applied ? undefined : onApply}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[0.65rem] font-medium border transition-all ${
-                    isApplied
+                    applied
                         ? 'bg-green-500/15 border-green-500/30 text-green-400 cursor-default'
                         : 'bg-lemon-yellow/10 border-lemon-yellow/30 text-lemon-yellow hover:bg-lemon-yellow/20 hover:border-lemon-yellow/50 cursor-pointer'
                 }`}
             >
-                {isApplied
+                {applied
                     ? <><Check size={11} /> Applied</>
                     : <><Zap size={11} /> {action.label}</>
                 }
             </button>
-            {canUndo && (
+            {applied && (
                 <button
-                    onClick={handleUndo}
+                    onClick={onUndo}
                     title="Undo this action"
                     className="flex items-center gap-1 px-2 py-1.5 rounded text-[0.6rem] font-medium border border-lemon-gray-600 text-lemon-text-muted hover:border-lemon-coral/50 hover:text-lemon-coral hover:bg-lemon-coral/8 transition-all"
                 >
                     <RotateCcw size={10} /> Undo
                 </button>
             )}
+        </div>
+    );
+}
+
+// ActionGroup — Apply All + individual buttons, coordinated state
+function ActionGroup({
+    actions,
+    projectId,
+    schedule,
+}: {
+    actions: RafaAction[];
+    projectId: string;
+    schedule: ScheduleDraft;
+}) {
+    const [appliedMap, setAppliedMap] = useState<Record<number, boolean>>({});
+    const undoRefs = useRef<Record<number, (() => void) | null>>({});
+
+    const applyOne = (idx: number) => {
+        if (appliedMap[idx]) return;
+        const action = actions[idx];
+        if (!action) return;
+        const undo = executeAction(action, projectId, schedule);
+        undoRefs.current[idx] = undo ?? null;
+        setAppliedMap(prev => ({ ...prev, [idx]: true }));
+    };
+
+    const undoOne = (idx: number) => {
+        undoRefs.current[idx]?.();
+        undoRefs.current[idx] = null;
+        setAppliedMap(prev => ({ ...prev, [idx]: false }));
+    };
+
+    const pendingCount = actions.filter((_, i) => !appliedMap[i]).length;
+    const allApplied = pendingCount === 0;
+
+    const applyAll = () => actions.forEach((_, idx) => {
+        if (!appliedMap[idx]) applyOne(idx);
+    });
+
+    return (
+        <div className="space-y-1.5">
+            <p className="text-[0.55rem] font-mono uppercase tracking-widest text-lemon-text-muted px-0.5">
+                Actions — click to apply
+            </p>
+
+            {/* Apply All — only shown when there are 2+ actions */}
+            {actions.length > 1 && (
+                <button
+                    onClick={allApplied ? undefined : applyAll}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[0.65rem] font-semibold border transition-all ${
+                        allApplied
+                            ? 'bg-green-500/15 border-green-500/30 text-green-400 cursor-default'
+                            : 'bg-lemon-cyan/12 border-lemon-cyan/40 text-lemon-cyan hover:bg-lemon-cyan/20 hover:border-lemon-cyan/60 cursor-pointer'
+                    }`}
+                >
+                    {allApplied
+                        ? <><Check size={11} /> All Applied</>
+                        : <><Zap size={11} /> Apply All ({pendingCount})</>
+                    }
+                </button>
+            )}
+
+            {actions.map((action, idx) => (
+                <ActionButton
+                    key={idx}
+                    action={action}
+                    applied={!!appliedMap[idx]}
+                    onApply={() => applyOne(idx)}
+                    onUndo={() => undoOne(idx)}
+                />
+            ))}
         </div>
     );
 }
@@ -352,32 +518,46 @@ export function AssistantDirectorPanel({
     isOpen,
     onToggle,
     projectId,
+    side = 'right',
+    pageMode = 'schedule',
+    isPrimary = true,
 }: {
     context?: ADPanelContext | null;
     snapshot?: ScheduleSnapshot | null;
     isOpen: boolean;
     onToggle: () => void;
     projectId: string;
+    /** Which side of the layout this panel sits on. Affects border and chevron. Default: 'right' */
+    side?: 'left' | 'right';
+    /** What page/stage Rafa is operating on. Changes tabs and quick prompts. Default: 'schedule' */
+    pageMode?: 'breakdown' | 'schedule';
+    /** When false (secondary agent), hides suggestion cards. Default: true */
+    isPrimary?: boolean;
 }) {
-    const apiKey = useSettingsStore((s) => s.geminiApiKey);
+    // ── Persistent thread from Zustand store (survives page navigation) ──
+    const rawMessages          = useChatStore((s) => s.rafaMessages);
+    const setRawMessages       = useChatStore((s) => s.setRafaMessages);
+    const setRafaSystemPrompt  = useChatStore((s) => s.setRafaSystemPrompt);
+    // Sandra's cached context so Rafa can invoke her even when she's not mounted
+    const sandraSystemPrompt    = useChatStore((s) => s.sandraSystemPrompt);
+    const sandraMessages        = useChatStore((s) => s.sandraMessages);
 
-    // Per-day keyed chat history. Key: "day:3" | "__schedule__"
-    const [chatHistory, setChatHistory] = useState<Record<string, Message[]>>({});
-    const [chatMode, setChatMode] = useState<'day' | 'schedule'>('day');
+    // Cast to panel-local Message type
+    const messages = rawMessages as Message[];
+    const setMessages = setRawMessages as (u: Message[] | ((p: Message[]) => Message[])) => void;
 
+    // chatMode: in breakdown pageMode uses 'scene'|'all-scenes'; in schedule uses 'day'|'schedule'
+    const [chatMode, setChatMode] = useState<string>(
+        pageMode === 'breakdown' ? 'scene' : 'day'
+    );
     const activeDayNum = snapshot?.activeDayNumber ?? null;
-    const chatKey = chatMode === 'schedule' ? '__schedule__' : `day:${activeDayNum ?? 'none'}`;
-    const messages = chatHistory[chatKey] ?? [];
 
-    const setMessages = useCallback(
+    const setMessagesStable = useCallback(
         (updater: Message[] | ((prev: Message[]) => Message[])) => {
-            setChatHistory(prev => {
-                const current = prev[chatKey] ?? [];
-                const next = typeof updater === 'function' ? updater(current) : updater;
-                return { ...prev, [chatKey]: next };
-            });
+            setMessages(updater);
         },
-        [chatKey],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [],
     );
 
     const [input, setInput] = useState('');
@@ -385,12 +565,7 @@ export function AssistantDirectorPanel({
     const [copied, setCopied] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Clear input on mode/day change
-    const prevChatKeyRef = useRef<string>(chatKey);
-    if (prevChatKeyRef.current !== chatKey) {
-        prevChatKeyRef.current = chatKey;
-        Promise.resolve().then(() => setInput(''));
-    }
+    // (Tab/day changes no longer clear the input or conversation)
 
     // Pre-fill from error context
     const prevContextRef = useRef<string | null>(null);
@@ -400,7 +575,13 @@ export function AssistantDirectorPanel({
         setInput(`Day ${context.dayNumber} has an issue: "${context.issue}". What's going on and how do I fix it?`);
     }
 
-    const systemPrompt = buildSystemPrompt(snapshot, context, chatMode);
+    const rafaSkillContext = useAgentBrainStore.getState().getRafaSkillContext();
+    const systemPrompt = buildSystemPrompt(snapshot, context, chatMode, rafaSkillContext || undefined, snapshot?.territory);
+
+    // Sync system prompt to store so Sandra can invoke Rafa even when this panel is unmounted
+    useEffect(() => {
+        if (systemPrompt) setRafaSystemPrompt(systemPrompt);
+    }, [systemPrompt, setRafaSystemPrompt]);
 
     // Auto-scroll
     useEffect(() => {
@@ -421,73 +602,110 @@ export function AssistantDirectorPanel({
         });
     }, [messages]);
 
+    // ── Cross-consult: Rafa asks Sandra a question ──────────────────────────
+    const executeCrossConsult = useCallback(async (
+        question: string,
+        targetSystemPrompt: string,
+        targetHistory: Message[],
+    ): Promise<string> => {
+        // Build conversation history into a single prompt
+        const historyLines = targetHistory
+            .filter(m => m.content && !m.crossAgent)
+            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+            .join('\n\n');
+        const prompt = historyLines
+            ? `${historyLines}\n\nUser: ${question}`
+            : question;
+
+        const result = await callLLM({
+            model: useSettingsStore.getState().getModelForRole('rafa'),
+            prompt,
+            systemPrompt: targetSystemPrompt,
+            temperature: 0.3,
+            maxTokens: 4096,
+        });
+        return result.text
+            .replace(/\[ACTIONS\][\s\S]*?(\[\/ACTIONS\]|$)/g, '')
+            .replace(/\[CROSS_CONSULT\][\s\S]*?(\[\/CROSS_CONSULT\]|$)/g, '')
+            .trim();
+    }, []);
+
     const sendMessage = useCallback(async (overrideText?: string) => {
         const text = (overrideText ?? input).trim();
-        if (!text || !apiKey || isLoading) return;
+        if (!text || isLoading) return;
 
-        setMessages(prev => [...prev, { role: 'user', content: text }]);
+        setMessagesStable(prev => [...prev, { role: 'user', content: text }]);
         if (!overrideText) setInput('');
         setIsLoading(true);
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({
-                // gemini-2.5-flash — best model available through the standard Google AI v1beta API.
-                // maxOutputTokens: 8192 is Flash's actual output token limit.
-                model: 'gemini-2.5-flash',
-                generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
-                safetySettings: [
-                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                ],
-                systemInstruction: systemPrompt,
+            // Build conversation history into a single prompt
+            const historyLines = messages
+                .filter(m => m.content && !m.crossAgent)
+                .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+                .join('\n\n');
+            const prompt = historyLines
+                ? `${historyLines}\n\nUser: ${text}`
+                : text;
+
+            const result = await callLLM({
+                model: useSettingsStore.getState().getModelForRole('rafa'),
+                prompt,
+                systemPrompt,
+                temperature: 0.3,
+                maxTokens: 8192,
             });
 
-            const history = messages.map(m => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }],
-            }));
+            const { prose, actions, crossConsult } = parseRafaResponse(result.text);
+            setMessagesStable(prev => [...prev, { role: 'assistant', content: prose, actions }]);
 
-            const chat = model.startChat({ history });
-
-            // Streaming placeholder
-            setMessages(prev => [...prev, { role: 'assistant', content: '', actions: [] }]);
-            setIsLoading(false);
-
-            const stream = await chat.sendMessageStream(text);
-            let full = '';
-            for await (const chunk of stream.stream) {
+            // ── Execute cross-consult if Rafa requested one ──
+            if (crossConsult && sandraSystemPrompt) {
+                setMessagesStable(prev => [...prev, {
+                    role: 'assistant',
+                    content: '',
+                    crossAgent: { from: 'sandra', question: crossConsult.question, loading: true },
+                }]);
                 try {
-                    const delta = chunk.text();
-                    full += delta;
-                    const visibleEnd = full.indexOf('[ACTIONS]');
-                    const liveText = visibleEnd === -1 ? full : full.slice(0, visibleEnd);
-                    setMessages(prev => {
+                    const sandraReply = await executeCrossConsult(
+                        crossConsult.question,
+                        sandraSystemPrompt,
+                        sandraMessages as Message[],
+                    );
+                    setMessagesStable(prev => {
                         const updated = [...prev];
-                        updated[updated.length - 1] = { role: 'assistant', content: liveText, actions: [] };
+                        const last = updated[updated.length - 1];
+                        if (last?.crossAgent?.loading) {
+                            updated[updated.length - 1] = {
+                                role: 'assistant',
+                                content: sandraReply,
+                                crossAgent: { from: 'sandra', question: crossConsult.question },
+                            };
+                        }
                         return updated;
                     });
-                } catch (chunkErr) {
-                    // Skip malformed chunks — don't abort the whole stream
-                    console.warn('[Rafa] chunk error:', chunkErr);
+                } catch {
+                    setMessagesStable(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last?.crossAgent?.loading) {
+                            updated[updated.length - 1] = {
+                                role: 'assistant',
+                                content: "Sandra didn't respond — try again.",
+                                crossAgent: { from: 'sandra', question: crossConsult.question },
+                            };
+                        }
+                        return updated;
+                    });
                 }
             }
-
-            const { prose, actions } = parseRafaResponse(full);
-            setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: prose, actions };
-                return updated;
-            });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${msg}`, actions: [] }]);
+            setMessagesStable(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${msg}`, actions: [] }]);
         } finally {
             setIsLoading(false);
         }
-    }, [input, apiKey, isLoading, messages, systemPrompt]);
+    }, [input, isLoading, messages, systemPrompt, sandraSystemPrompt, sandraMessages, executeCrossConsult, setMessagesStable]);
 
     const quickPrompts = getQuickPrompts(snapshot);
 
@@ -497,14 +715,14 @@ export function AssistantDirectorPanel({
 
     if (!isOpen) {
         return (
-            <div className="w-10 flex-shrink-0 border-l border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col items-center pt-4 gap-2">
+            <div className={`w-10 flex-shrink-0 ${side === 'left' ? 'border-r' : 'border-l'} border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col items-center pt-4 gap-2`}>
                 <button
                     onClick={onToggle}
                     title="Open Rafa — AI First AD"
                     className="flex flex-col items-center gap-1.5 text-lemon-text-muted hover:text-lemon-yellow transition-colors"
                 >
                     <Bot size={16} />
-                    <ChevronLeft size={10} />
+                    {side === 'left' ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
                 </button>
                 <div
                     className="mt-2 text-[0.5rem] font-display font-bold uppercase tracking-widest text-lemon-text-muted"
@@ -521,7 +739,7 @@ export function AssistantDirectorPanel({
     // -----------------------------------------------------------------------
 
     return (
-        <div className="w-72 flex-shrink-0 border-l border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col">
+        <div className={`w-72 flex-shrink-0 ${side === 'left' ? 'border-r' : 'border-l'} border-lemon-gray-700 bg-lemon-bg-secondary/50 flex flex-col`}>
 
             {/* ── Header ── */}
             <div className="px-3 pt-2.5 pb-0 border-b border-lemon-gray-700">
@@ -532,13 +750,9 @@ export function AssistantDirectorPanel({
                         <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-bold uppercase tracking-wider text-lemon-text-primary">Rafa</p>
-                        <p className="text-[0.6rem] text-lemon-text-muted truncate">
-                            {chatMode === 'schedule'
-                                ? `Full schedule · ${snapshot?.schedule.shootDays.length ?? 0} days`
-                                : activeDayNum
-                                ? `Day ${activeDayNum} chat`
-                                : 'AI First AD'}
+                        <p className="text-xs font-display font-bold uppercase tracking-wider text-lemon-text-primary">
+                            Rafa
+                            <span className="text-lemon-text-muted font-normal"> — 1st AD</span>
                         </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -558,28 +772,55 @@ export function AssistantDirectorPanel({
                     </div>
                 </div>
 
-                {/* Mode tabs */}
+                {/* Mode tabs — labels and values depend on pageMode */}
                 <div className="flex">
-                    <button
-                        onClick={() => setChatMode('day')}
-                        className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
-                            chatMode === 'day'
-                                ? 'border-lemon-yellow text-lemon-yellow'
-                                : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
-                        }`}
-                    >
-                        {activeDayNum ? `Day ${activeDayNum}` : 'Day'}
-                    </button>
-                    <button
-                        onClick={() => setChatMode('schedule')}
-                        className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
-                            chatMode === 'schedule'
-                                ? 'border-lemon-cyan text-lemon-cyan'
-                                : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
-                        }`}
-                    >
-                        All Days
-                    </button>
+                    {pageMode === 'breakdown' ? (
+                        <>
+                            <button
+                                onClick={() => setChatMode('scene')}
+                                className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
+                                    chatMode === 'scene'
+                                        ? 'border-lemon-yellow text-lemon-yellow'
+                                        : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
+                                }`}
+                            >
+                                {snapshot?.activeDayNumber ? `Scene ${snapshot.activeDayNumber}` : 'Scene'}
+                            </button>
+                            <button
+                                onClick={() => setChatMode('all-scenes')}
+                                className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
+                                    chatMode === 'all-scenes'
+                                        ? 'border-lemon-cyan text-lemon-cyan'
+                                        : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
+                                }`}
+                            >
+                                All Scenes
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => setChatMode('day')}
+                                className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
+                                    chatMode === 'day'
+                                        ? 'border-lemon-yellow text-lemon-yellow'
+                                        : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
+                                }`}
+                            >
+                                {activeDayNum ? `Day ${activeDayNum}` : 'Day'}
+                            </button>
+                            <button
+                                onClick={() => setChatMode('schedule')}
+                                className={`flex-1 py-1.5 text-[0.6rem] font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
+                                    chatMode === 'schedule'
+                                        ? 'border-lemon-cyan text-lemon-cyan'
+                                        : 'border-transparent text-lemon-text-muted hover:text-lemon-text-body'
+                                }`}
+                            >
+                                All Days
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -600,71 +841,119 @@ export function AssistantDirectorPanel({
                 </div>
             )}
 
-            {/* ── No API key ── */}
-            {!apiKey && (
-                <div className="flex-1 flex flex-col items-center justify-center p-4 text-center gap-2">
-                    <AlertTriangle size={24} className="text-lemon-yellow" />
-                    <p className="text-xs text-lemon-text-muted">Add a Gemini API key in Settings to use Rafa.</p>
-                </div>
-            )}
-
             {/* ── Empty state ── */}
-            {apiKey && messages.length === 0 && !context && (
+            {messages.length === 0 && !context && (
                 <div className="flex-1 flex flex-col items-start justify-start p-3 gap-3 overflow-y-auto">
                     <div className="w-full text-center pt-4 pb-1">
                         <p className="text-xs font-display font-bold text-lemon-text-primary">I'm Rafa.</p>
                         <p className="text-[0.65rem] text-lemon-text-muted leading-relaxed mt-0.5">
-                            First AD. I see the full stripboard, every day, every scene.
-                            Click below to get started.
+                            {isPrimary
+                                ? pageMode === 'breakdown'
+                                    ? 'First AD. I own the breakdown. Click below to get started.'
+                                    : 'First AD. I see the full stripboard, every day, every scene. Click below to get started.'
+                                : "I'm available to consult on scheduling and logistics."
+                            }
                         </p>
                     </div>
 
-                    {/* Day Feasibility Analysis card (day mode only) */}
-                    {chatMode === 'day' && activeDayNum && (
-                        <button
-                            onClick={() => sendMessage(
-                                `Look at Day ${activeDayNum} — the strips, page count, cast, locations, and element load. ` +
-                                `Give me your honest take: is this day feasible? What's going to be a problem? ` +
-                                `Keep it straight. If you can fix anything, include an [ACTIONS] block.`
-                            )}
-                            className="w-full text-left rounded-lg border border-lemon-yellow/30 bg-lemon-yellow/5 hover:bg-lemon-yellow/10 hover:border-lemon-yellow/50 transition-all p-3 group"
-                        >
-                            <div className="flex items-start gap-2">
-                                <div className="w-6 h-6 rounded bg-lemon-yellow/15 border border-lemon-yellow/30 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-lemon-yellow/25 transition-colors">
-                                    <CalendarDays size={12} className="text-lemon-yellow" />
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-[0.7rem] font-bold text-lemon-yellow leading-tight">
-                                        Day {activeDayNum} Feasibility Analysis
-                                    </p>
-                                    <p className="text-[0.6rem] text-lemon-text-muted leading-snug mt-0.5">
-                                        Check page count, cast load, locations, and element complexity.
-                                    </p>
-                                </div>
-                            </div>
-                        </button>
-                    )}
+                    {/* ── Suggestion cards — only shown when Rafa is the primary agent ── */}
+                    {isPrimary && (
+                        <>
+                            {pageMode === 'breakdown' ? (
+                                <>
+                                    {/* Scene Breakdown Analysis card */}
+                                    <button
+                                        onClick={() => sendMessage(
+                                            `I'm looking at the script breakdown. Walk me through what I need to flag right now: ` +
+                                            `scenes with complex elements, unusual locations, large cast days, and anything that will hurt the schedule. ` +
+                                            `Be specific. If you can add [ACTIONS] to flag elements, do it.`
+                                        )}
+                                        className="w-full text-left rounded-lg border border-lemon-yellow/30 bg-lemon-yellow/5 hover:bg-lemon-yellow/10 hover:border-lemon-yellow/50 transition-all p-3 group"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <div className="w-6 h-6 rounded bg-lemon-yellow/15 border border-lemon-yellow/30 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-lemon-yellow/25 transition-colors">
+                                                <Layers size={12} className="text-lemon-yellow" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[0.7rem] font-bold text-lemon-yellow leading-tight">
+                                                    Script Breakdown Review
+                                                </p>
+                                                <p className="text-[0.6rem] text-lemon-text-muted leading-snug mt-0.5">
+                                                    Flag complex scenes, big cast days, and schedule risks upfront.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </button>
 
-                    {/* Quick prompts */}
-                    {quickPrompts.length > 0 && (
-                        <div className="w-full space-y-1">
-                            {quickPrompts.map(prompt => (
-                                <button
-                                    key={prompt}
-                                    onClick={() => sendMessage(prompt)}
-                                    className="w-full text-left px-2.5 py-1.5 text-[0.6rem] text-lemon-text-muted border border-lemon-gray-700 rounded hover:border-lemon-yellow/40 hover:text-lemon-text-body hover:bg-lemon-yellow/5 transition-colors leading-snug"
-                                >
-                                    {prompt}
-                                </button>
-                            ))}
-                        </div>
+                                    {/* Quick prompts for breakdown context */}
+                                    <div className="w-full space-y-1">
+                                        {[
+                                            'Which scenes have the most elements to track?',
+                                            'What are my biggest scheduling risks in this script?',
+                                            'Show me all exterior night scenes — those affect turnaround.',
+                                            'Which scenes share the same location I should group?',
+                                        ].map(prompt => (
+                                            <button
+                                                key={prompt}
+                                                onClick={() => sendMessage(prompt)}
+                                                className="w-full text-left px-2.5 py-1.5 text-[0.6rem] text-lemon-text-muted border border-lemon-gray-700 rounded hover:border-lemon-yellow/40 hover:text-lemon-text-body hover:bg-lemon-yellow/5 transition-colors leading-snug"
+                                            >
+                                                {prompt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Day Feasibility Analysis card (schedule mode, day tab) */}
+                                    {chatMode === 'day' && activeDayNum && (
+                                        <button
+                                            onClick={() => sendMessage(
+                                                `Look at Day ${activeDayNum} — the strips, page count, cast, locations, and element load. ` +
+                                                `Give me your honest take: is this day feasible? What's going to be a problem? ` +
+                                                `Keep it straight. If you can fix anything, include an [ACTIONS] block.`
+                                            )}
+                                            className="w-full text-left rounded-lg border border-lemon-yellow/30 bg-lemon-yellow/5 hover:bg-lemon-yellow/10 hover:border-lemon-yellow/50 transition-all p-3 group"
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                <div className="w-6 h-6 rounded bg-lemon-yellow/15 border border-lemon-yellow/30 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-lemon-yellow/25 transition-colors">
+                                                    <CalendarDays size={12} className="text-lemon-yellow" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[0.7rem] font-bold text-lemon-yellow leading-tight">
+                                                        Day {activeDayNum} Feasibility Analysis
+                                                    </p>
+                                                    <p className="text-[0.6rem] text-lemon-text-muted leading-snug mt-0.5">
+                                                        Check page count, cast load, locations, and element complexity.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    )}
+
+                                    {/* Quick prompts for schedule context */}
+                                    {quickPrompts.length > 0 && (
+                                        <div className="w-full space-y-1">
+                                            {quickPrompts.map(prompt => (
+                                                <button
+                                                    key={prompt}
+                                                    onClick={() => sendMessage(prompt)}
+                                                    className="w-full text-left px-2.5 py-1.5 text-[0.6rem] text-lemon-text-muted border border-lemon-gray-700 rounded hover:border-lemon-yellow/40 hover:text-lemon-text-body hover:bg-lemon-yellow/5 transition-colors leading-snug"
+                                                >
+                                                    {prompt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </>
                     )}
                 </div>
             )}
 
             {/* ── Messages ── */}
-            {apiKey && (
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
                     {messages.map((msg, i) => (
                         <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                             {/* Rafa avatar */}
@@ -674,37 +963,54 @@ export function AssistantDirectorPanel({
                                 </div>
                             )}
                             <div className="flex-1 min-w-0 space-y-2">
-                                <div
-                                    className={`rounded-xl px-3 py-2 text-[0.72rem] leading-relaxed whitespace-pre-wrap break-words ${
-                                        msg.role === 'user'
-                                            ? 'bg-lemon-gray-700 text-lemon-text-primary ml-4'
-                                            : 'bg-lemon-bg-elevated text-lemon-text-body'
-                                    }`}
-                                >
-                                    {msg.content || (
-                                        // Streaming dots
-                                        <span className="flex gap-1 items-center h-3">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:0ms]" />
-                                            <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:150ms]" />
-                                            <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:300ms]" />
-                                        </span>
-                                    )}
-                                </div>
-                                {/* Action buttons */}
-                                {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && snapshot?.schedule && (
-                                    <div className="space-y-1.5">
-                                        <p className="text-[0.55rem] font-mono uppercase tracking-widest text-lemon-text-muted px-0.5">
-                                            Actions — click to apply
-                                        </p>
-                                        {msg.actions.map((action, ai) => (
-                                            <ActionButton
-                                                key={ai}
-                                                action={action}
-                                                projectId={projectId}
-                                                schedule={snapshot.schedule}
-                                            />
-                                        ))}
+                                {/* Relay bubble (cross-agent consultation from Sandra) */}
+                                {msg.crossAgent ? (
+                                    <div className="rounded-xl border border-lemon-cyan/25 bg-lemon-cyan/5 overflow-hidden">
+                                        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-lemon-cyan/15 bg-lemon-cyan/8">
+                                            <ArrowRightLeft size={9} className="text-lemon-cyan/70 flex-shrink-0" />
+                                            <span className="text-[0.55rem] font-mono uppercase tracking-widest text-lemon-cyan/80">
+                                                {msg.crossAgent.loading ? 'Consulting Sandra…' : 'Sandra responded'}
+                                            </span>
+                                            <span className="ml-auto text-[0.5rem] text-lemon-text-muted truncate max-w-[100px]" title={msg.crossAgent.question}>
+                                                "{msg.crossAgent.question.slice(0, 45)}{msg.crossAgent.question.length > 45 ? '…' : ''}"
+                                            </span>
+                                        </div>
+                                        <div className="px-2.5 py-2 text-[0.72rem] leading-relaxed whitespace-pre-wrap text-lemon-text-body break-words">
+                                            {msg.crossAgent.loading ? (
+                                                <span className="flex gap-1 items-center h-3">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-lemon-cyan/60 animate-bounce [animation-delay:0ms]" />
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-lemon-cyan/60 animate-bounce [animation-delay:150ms]" />
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-lemon-cyan/60 animate-bounce [animation-delay:300ms]" />
+                                                </span>
+                                            ) : msg.content}
+                                        </div>
                                     </div>
+                                ) : (
+                                    /* Normal prose bubble */
+                                    <div
+                                        className={`rounded-xl px-3 py-2 text-[0.72rem] leading-relaxed whitespace-pre-wrap break-words ${
+                                            msg.role === 'user'
+                                                ? 'bg-lemon-gray-700 text-lemon-text-primary ml-4'
+                                                : 'bg-lemon-bg-elevated text-lemon-text-body'
+                                        }`}
+                                    >
+                                        {msg.content || (
+                                            // Streaming dots
+                                            <span className="flex gap-1 items-center h-3">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:0ms]" />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:150ms]" />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:300ms]" />
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {/* Action buttons (only on normal Rafa messages) */}
+                                {!msg.crossAgent && msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && snapshot?.schedule && (
+                                    <ActionGroup
+                                        actions={msg.actions}
+                                        projectId={projectId}
+                                        schedule={snapshot.schedule}
+                                    />
                                 )}
                             </div>
                         </div>
@@ -726,11 +1032,9 @@ export function AssistantDirectorPanel({
                         </div>
                     )}
                 </div>
-            )}
 
             {/* ── Input ── */}
-            {apiKey && (
-                <div className="border-t border-lemon-gray-700 p-2 flex gap-2 items-end flex-shrink-0">
+            <div className="border-t border-lemon-gray-700 p-2 flex gap-2 items-end flex-shrink-0">
                     <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -752,7 +1056,6 @@ export function AssistantDirectorPanel({
                         <Send size={14} />
                     </button>
                 </div>
-            )}
         </div>
     );
 }

@@ -8,6 +8,7 @@ node_modules/
 # production
 dist/
 build/
+functions/lib/
 
 # env files
 .env
@@ -34,3 +35,9 @@ Thumbs.db
 # test data (large PDFs)
 docs/test-screenplays/
 .vercel
+
+# Agent/tool artifacts
+.superpowers/
+.playwright-mcp/
+.claude-md-backups/
+firebase-debug.log

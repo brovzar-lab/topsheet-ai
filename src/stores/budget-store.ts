@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { BudgetDraft, BudgetLineItem } from '@/types';
 import {
     saveDraftHeader,
@@ -6,16 +7,25 @@ import {
     bulkDeleteLineItems,
     loadDraftsForProject,
 } from '@/lib/firestore/budgets';
+import { getCurrentUid } from '@/lib/auth-state';
 
 
 interface BudgetState {
     drafts: BudgetDraft[];
+    lastSavedAt: number | null;
     addDraft: (draft: BudgetDraft) => void;
     updateDraft: (draftId: string, updater: (draft: BudgetDraft) => BudgetDraft) => void;
     getDraftsForProject: (projectId: string) => BudgetDraft[];
     getDraft: (draftId: string) => BudgetDraft | undefined;
     getLatestDraft: (projectId: string) => BudgetDraft | undefined;
     deleteDraftsForProject: (projectId: string) => void;
+    /** Update a single line item field and recalculate totals */
+    updateLineItem: (
+        draftId: string,
+        lineId: string,
+        field: 'rateCentavos' | 'quantity' | 'duration' | 'description',
+        value: number | string,
+    ) => void;
     /** Multiply rate/subtotal of selected lines by a factor */
     bulkScaleLines: (draftId: string, lineIds: string[], factor: number) => void;
     /** Delete selected lines */
@@ -29,15 +39,20 @@ interface BudgetState {
     loadFromFirestore: (uid: string, projectId: string) => Promise<void>;
 }
 
-export const useBudgetStore = create<BudgetState>((set, get) => ({
+export const useBudgetStore = create<BudgetState>()(
+    persist(
+        (set, get) => ({
     drafts: [],
+    lastSavedAt: null,
 
     addDraft: (draft) => {
         set((state) => ({ drafts: [...state.drafts, draft] }));
-        const uid = _getUid();
+        const uid = getCurrentUid();
         if (!uid) return;
         // Save header + all line items
-        saveDraftHeader(uid, draft).catch(console.error);
+        saveDraftHeader(uid, draft)
+            .then(() => set({ lastSavedAt: Date.now() }))
+            .catch(console.error);
         if (draft.lineItems.length > 0) {
             bulkSaveLineItems(uid, draft.id, draft.lineItems).catch(console.error);
         }
@@ -50,10 +65,12 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
         }));
         const updated = get().drafts.find((d) => d.id === draftId);
         if (!updated) return;
-        const uid = _getUid();
+        const uid = getCurrentUid();
         if (!uid) return;
         // Always save the header
-        saveDraftHeader(uid, updated).catch(console.error);
+        saveDraftHeader(uid, updated)
+            .then(() => set({ lastSavedAt: Date.now() }))
+            .catch(console.error);
         // Only save line items that changed
         if (prev) {
             const prevIds = new Set(prev.lineItems.map((l) => l.id));
@@ -93,6 +110,23 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
         set((state) => ({
             drafts: state.drafts.filter((d) => d.projectId !== projectId),
         })),
+
+    updateLineItem: (draftId, lineId, field, value) => {
+        get().updateDraft(draftId, (draft) => {
+            const updated = draft.lineItems.map((li) => {
+                if (li.id !== lineId) return li;
+                const patched = { ...li, [field]: value, isOverridden: true };
+                // Recalculate subtotal when numeric fields change
+                if (field !== 'description') {
+                    patched.subtotalCentavos = patched.rateCentavos * patched.quantity * patched.duration;
+                }
+                return patched;
+            });
+            const total = updated.reduce((s, li) => s + li.subtotalCentavos, 0);
+            const contingency = Math.round(total * draft.contingencyPercent / 100);
+            return { ...draft, lineItems: updated, totalCentavos: total + contingency, contingencyCentavos: contingency };
+        });
+    },
 
     bulkScaleLines: (draftId, lineIds, factor) => {
         const lineSet = new Set(lineIds);
@@ -160,13 +194,13 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
             console.error('[BudgetStore] Failed to load from Firestore:', err);
         }
     },
-}));
-
-function _getUid(): string | null {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('@/stores/auth-store').useAuthStore.getState().user?.uid ?? null;
-    } catch {
-        return null;
-    }
-}
+        }),
+        {
+            name: 'topsheet-budgets',
+            version: 1,
+            partialize: (state) => ({
+                drafts: state.drafts,
+            }),
+        }
+    )
+);

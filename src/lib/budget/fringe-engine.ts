@@ -57,7 +57,7 @@ export interface FringeResult {
     totalFringeCentavos: number;
 }
 
-let _fringeIdCounter = 0;
+
 
 /**
  * Calculate fringe line items from existing budget line items.
@@ -81,7 +81,7 @@ export function calculateFringes(
             const fringeCentavos = Math.round(item.subtotalCentavos * (config.imssPercent / 100));
             totalImss += fringeCentavos;
             imssItems.push({
-                id: `fringe_imss_${++_fringeIdCounter}`,
+                id: `fringe_imss_${crypto.randomUUID()}`,
                 categoryCode: item.categoryCode,
                 description: `IMSS ${config.imssPercent}% — ${item.description}`,
                 unit: 'fringe',
@@ -99,7 +99,7 @@ export function calculateFringes(
             const fringeCentavos = Math.round(item.subtotalCentavos * (config.andaPercent / 100));
             totalAnda += fringeCentavos;
             andaItems.push({
-                id: `fringe_anda_${++_fringeIdCounter}`,
+                id: `fringe_anda_${crypto.randomUUID()}`,
                 categoryCode: item.categoryCode,
                 description: `ANDA ${config.andaPercent}% — ${item.description}`,
                 unit: 'fringe',
@@ -117,7 +117,7 @@ export function calculateFringes(
             const fringeCentavos = Math.round(item.subtotalCentavos * (config.otPercent / 100));
             totalOt += fringeCentavos;
             otItems.push({
-                id: `fringe_ot_${++_fringeIdCounter}`,
+                id: `fringe_ot_${crypto.randomUUID()}`,
                 categoryCode: item.categoryCode,
                 description: `OT ${config.otPercent}% — ${item.description}`,
                 unit: 'fringe',

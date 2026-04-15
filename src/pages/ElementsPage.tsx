@@ -10,10 +10,14 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { EpisodeBreadcrumb } from '@/components/EpisodeBreadcrumb';
 import { Package, Search, ChevronDown, ChevronRight, Hash } from 'lucide-react';
 import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useScheduleStore } from '@/stores/schedule-store';
+import { useSceneStore } from '@/stores/scene-store';
 import { ELEMENT_CATEGORIES, type ElementCategoryDef } from '@/data/element-categories';
 import type { ElementCategoryId } from '@/types';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 
 interface MasterElement {
     name: string;
@@ -30,6 +34,9 @@ export function ElementsPage() {
     const [search, setSearch] = useState('');
     const [expandedElement, setExpandedElement] = useState<string | null>(null);
     const [filterCategory, setFilterCategory] = useState<ElementCategoryId | 'all'>('all');
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
+    const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
+    const scenes = useSceneStore((s) => s.getScenes(projectId ?? ''));
 
     // Build master element list
     const masterElements = useMemo(() => {
@@ -115,7 +122,9 @@ export function ElementsPage() {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full">
+            <div className="flex flex-col flex-1 min-w-0">
+            <EpisodeBreadcrumb />
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-lemon-gray-700 bg-lemon-bg-primary/80 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -141,6 +150,7 @@ export function ElementsPage() {
                 <div className="relative flex-1 max-w-sm">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-lemon-gray-500" />
                     <input
+                        aria-label="Search elements"
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -242,6 +252,26 @@ export function ElementsPage() {
                     );
                 })}
             </div>
+        </div>
+            {/* ── Rafa (1st AD) panel ── */}
+            <AssistantDirectorPanel
+                projectId={projectId ?? ''}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                context={null}
+                snapshot={{
+                    projectId: projectId ?? '',
+                    schedule: schedule ?? undefined,
+                    breakdowns,
+                    activeDayNumber: null,
+                    scenes: scenes.map((sc) => ({
+                        sceneNumber: sc.sceneNumber,
+                        slugline: sc.slugline,
+                        content: sc.content,
+                        pageCount: sc.pageCount,
+                    })),
+                }}
+            />
         </div>
     );
 }

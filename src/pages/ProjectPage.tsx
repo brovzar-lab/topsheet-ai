@@ -3,15 +3,25 @@
  *
  * Shows the parsed script text with breakdown elements highlighted inline.
  * Elements are color-coded by category. Click a highlighted word to see its details.
+ *
+ * Layout:
+ *   [Scene List (drag-resizable)] | [Script Content (flex-1)] | [Rafa — AI 1st AD (right panel)]
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Tag, Eye, EyeOff } from 'lucide-react';
+import { FileText, Tag, Eye, EyeOff, Bot } from 'lucide-react';
 import { useProjectStore } from '@/stores/project-store';
 import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { getCategoryById } from '@/data/element-categories';
+import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
+import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
+
+// Sidebar drag constraints
+const SIDEBAR_MIN = 140;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_DEFAULT = 224; // w-56 = 14rem = 224px
 
 export function ProjectPage() {
     const { id: projectId } = useParams<{ id: string }>();
@@ -21,6 +31,58 @@ export function ProjectPage() {
 
     const [selectedScene, setSelectedScene] = useState<string | null>(scenes[0]?.sceneNumber ?? null);
     const [showTags, setShowTags] = useState(true);
+
+    // ── Resizable sidebar ──
+    const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+    const dragging = useRef(false);
+    const startX = useRef(0);
+    const startWidth = useRef(SIDEBAR_DEFAULT);
+
+    const onDragStart = useCallback((e: React.MouseEvent) => {
+        dragging.current = true;
+        startX.current = e.clientX;
+        startWidth.current = sidebarWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, [sidebarWidth]);
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!dragging.current) return;
+            const delta = e.clientX - startX.current;
+            const next = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, startWidth.current + delta));
+            setSidebarWidth(next);
+        };
+        const onUp = () => {
+            if (!dragging.current) return;
+            dragging.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, []);
+
+    // ── Rafa panel state ──
+    const [adPanelOpen, setAdPanelOpen] = useState(true);
+
+    // Build Rafa's script-aware snapshot — scenes are THE SOURCE OF TRUTH
+    const rafaSnapshot: ScheduleSnapshot | null = useMemo(() => ({
+        projectId: projectId ?? '',
+        schedule: undefined,
+        breakdowns,
+        activeDayNumber: null,
+        scenes: scenes.map((sc) => ({
+            sceneNumber: sc.sceneNumber,
+            slugline: sc.slugline,
+            content: sc.content,
+            pageCount: sc.pageCount,
+        })),
+    }), [projectId, breakdowns, scenes]);
 
     if (!projectId || !project) {
         return (
@@ -59,8 +121,11 @@ export function ProjectPage() {
 
     return (
         <div className="flex h-full">
-            {/* ── Scene List ── */}
-            <aside className="w-56 border-r border-lemon-gray-700 bg-lemon-bg-secondary/50 overflow-y-auto flex-shrink-0">
+            {/* ── Scene List (drag-resizable) ── */}
+            <aside
+                className="border-r border-lemon-gray-700 bg-lemon-bg-secondary/50 overflow-y-auto flex-shrink-0 relative"
+                style={{ width: sidebarWidth }}
+            >
                 <div className="p-3 border-b border-lemon-gray-700">
                     <span className="lemon-label block mb-0.5">SCRIPT</span>
                     <p className="text-[0.6rem] text-lemon-text-muted">{scenes.length} scenes · {project.pdfFilename}</p>
@@ -82,25 +147,55 @@ export function ProjectPage() {
                         </button>
                     ))}
                 </div>
+
+                {/* Drag handle — right edge of sidebar */}
+                <div
+                    onMouseDown={onDragStart}
+                    className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize group z-10"
+                    title="Drag to resize"
+                >
+                    <div className="absolute right-0 top-0 h-full w-px bg-lemon-gray-700 group-hover:bg-lemon-cyan/50 group-active:bg-lemon-cyan transition-colors" />
+                    {/* Grab indicator dots */}
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 pr-px opacity-0 group-hover:opacity-100 transition-opacity">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="w-0.5 h-0.5 rounded-full bg-lemon-cyan" />
+                        ))}
+                    </div>
+                </div>
             </aside>
 
             {/* ── Script Content ── */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 min-w-0">
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <span className="lemon-label block mb-1">PROJECT · SCRIPT</span>
                         <h1 className="text-lg">{project.title}</h1>
                     </div>
-                    <button
-                        onClick={() => setShowTags(!showTags)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-mono transition-colors ${showTags
-                            ? 'border-lemon-cyan text-lemon-cyan bg-lemon-cyan/10'
-                            : 'border-lemon-gray-600 text-lemon-text-muted hover:border-lemon-gray-500'
+                    <div className="flex items-center gap-2">
+                        {/* Rafa toggle button */}
+                        <button
+                            onClick={() => setAdPanelOpen((o) => !o)}
+                            title="Open Rafa — AI 1st AD"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-display font-bold uppercase tracking-wider transition-colors ${
+                                adPanelOpen
+                                    ? 'bg-lemon-yellow/15 border-lemon-yellow/40 text-lemon-yellow'
+                                    : 'bg-lemon-bg-secondary border-lemon-gray-700 text-lemon-text-muted hover:text-lemon-yellow hover:border-lemon-yellow'
                             }`}
-                    >
-                        {showTags ? <Eye size={12} /> : <EyeOff size={12} />}
-                        {showTags ? 'Tags On' : 'Tags Off'}
-                    </button>
+                        >
+                            <Bot size={12} />
+                            1st AD
+                        </button>
+                        <button
+                            onClick={() => setShowTags(!showTags)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-xs font-mono transition-colors ${showTags
+                                ? 'border-lemon-cyan text-lemon-cyan bg-lemon-cyan/10'
+                                : 'border-lemon-gray-600 text-lemon-text-muted hover:border-lemon-gray-500'
+                                }`}
+                        >
+                            {showTags ? <Eye size={12} /> : <EyeOff size={12} />}
+                            {showTags ? 'Tags On' : 'Tags Off'}
+                        </button>
+                    </div>
                 </div>
 
                 {currentScene && (
@@ -156,6 +251,18 @@ export function ProjectPage() {
                     </div>
                 )}
             </div>
+
+            {/* ── Rafa (1st AD) — verifies script parsing and scene accuracy ── */}
+            <AssistantDirectorPanel
+                context={null}
+                snapshot={rafaSnapshot}
+                isOpen={adPanelOpen}
+                onToggle={() => setAdPanelOpen((o) => !o)}
+                projectId={projectId}
+                side="right"
+                pageMode="breakdown"
+                isPrimary={true}
+            />
         </div>
     );
 }
