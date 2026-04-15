@@ -14,6 +14,7 @@ import {
 import { db } from '@/lib/firebase';
 import type { Series, Episode, CreateSeriesInput, RosterEntry } from '@/types/series';
 import { deriveRuntimeTemplate } from '@/types/series';
+import { stripUndefined } from './strip-undefined';
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -58,10 +59,10 @@ export async function createSeries(
         createdAt: now,
         updatedAt: now,
     };
-    await setDoc(seriesDocRef(uid, id), {
+    await setDoc(seriesDocRef(uid, id), stripUndefined({
         ...series,
         _updatedAt: serverTimestamp(),
-    });
+    }));
     return series;
 }
 
@@ -92,11 +93,11 @@ export async function updateSeries(
     updates: Partial<Series>
 ): Promise<void> {
     const now = new Date().toISOString();
-    await updateDoc(seriesDocRef(uid, seriesId), {
+    await updateDoc(seriesDocRef(uid, seriesId), stripUndefined({
         ...updates,
         updatedAt: now,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 /**
@@ -160,10 +161,10 @@ export async function createEpisodes(
             createdAt: now,
             updatedAt: now,
         };
-        await setDoc(episodeDocRef(uid, seriesId, id), {
+        await setDoc(episodeDocRef(uid, seriesId, id), stripUndefined({
             ...ep,
             _updatedAt: serverTimestamp(),
-        });
+        }));
         episodes.push(ep);
     }
 
@@ -190,11 +191,11 @@ export async function updateEpisode(
     updates: Partial<Episode>
 ): Promise<void> {
     const now = new Date().toISOString();
-    await updateDoc(episodeDocRef(uid, seriesId, episodeId), {
+    await updateDoc(episodeDocRef(uid, seriesId, episodeId), stripUndefined({
         ...updates,
         updatedAt: now,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 
@@ -223,7 +224,7 @@ export async function upsertRosterEntry(
 ): Promise<void> {
     await setDoc(
         doc(db, 'users', uid, 'series', seriesId, 'roster', entry.id),
-        { ...entry, _updatedAt: serverTimestamp() }
+        { ...stripUndefined(entry), _updatedAt: serverTimestamp() }
     );
 }
 
@@ -235,7 +236,7 @@ export async function addRosterEntry(
 ): Promise<void> {
     await setDoc(
         doc(db, 'users', uid, 'series', seriesId, 'roster', entry.id),
-        { ...entry, _updatedAt: serverTimestamp() }
+        { ...stripUndefined(entry), _updatedAt: serverTimestamp() }
     );
 }
 
@@ -248,6 +249,6 @@ export async function updateRosterEntry(
 ): Promise<void> {
     await updateDoc(
         doc(db, 'users', uid, 'series', seriesId, 'roster', entryId),
-        { ...updates, _updatedAt: serverTimestamp() }
+        { ...stripUndefined(updates), _updatedAt: serverTimestamp() }
     );
 }

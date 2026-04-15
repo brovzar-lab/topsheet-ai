@@ -18,22 +18,15 @@ import {
     X, Send, Loader2, Sparkles, Bot, RotateCcw, ChevronDown,
 } from 'lucide-react';
 import { useChatStore } from '@/stores/chat-store';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
+import { useSettingsStore } from '@/stores/settings-store';
+import { callLLM } from '@/lib/ai/proxyClient';
 
 // -----------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------
 
 const MAX_ROUNDS = 10; // max turns per agent (20 total exchanges)
-const MODEL = 'gemini-2.5-flash';
-const SAFETY = [
-    { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_NONE },
-    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_NONE },
-    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-];
 
 // -----------------------------------------------------------------------
 // Types
@@ -145,28 +138,28 @@ Keep it under 120 words. End with one pointed question or challenge.`;
 // -----------------------------------------------------------------------
 
 async function streamTurn(
-    apiKey: string,
     systemPrompt: string,
     history: Array<{ role: 'user' | 'model'; parts: [{ text: string }] }>,
     userMessage: string,
-    onChunk: (delta: string) => void,
+    onChunk: (fullText: string) => void,
 ): Promise<string> {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-        model: MODEL,
-        generationConfig: { temperature: 0.65, maxOutputTokens: 1024 },
-        safetySettings: SAFETY,
-        systemInstruction: systemPrompt,
+    // Build a single prompt from history + current message
+    const historyText = history
+        .map(h => `[${h.role === 'model' ? 'ASSISTANT' : 'USER'}]: ${h.parts[0].text}`)
+        .join('\n\n');
+    const prompt = historyText
+        ? `${historyText}\n\n[USER]: ${userMessage}`
+        : userMessage;
+
+    const { text } = await callLLM({
+        model: useSettingsStore.getState().getModelForRole('brainstorm'),
+        systemPrompt,
+        prompt,
+        temperature: 0.65,
+        maxTokens: 1024,
     });
-    const chat = model.startChat({ history });
-    const stream = await chat.sendMessageStream(userMessage);
-    let full = '';
-    for await (const chunk of stream.stream) {
-        const delta = chunk.text();
-        full += delta;
-        onChunk(delta);
-    }
-    return full;
+    onChunk(text);
+    return text;
 }
 
 // -----------------------------------------------------------------------
@@ -198,7 +191,6 @@ export function FigureItOutButton({ onClick }: { onClick: () => void }) {
 // -----------------------------------------------------------------------
 
 export function BrainstormPanel({ onClose }: { onClose: () => void }) {
-    const apiKey = useSettingsStore((s) => s.geminiApiKey);
     const sandraSystemPrompt = useChatStore((s) => s.sandraSystemPrompt);
     const rafaSystemPrompt  = useChatStore((s) => s.rafaSystemPrompt);
 
@@ -230,7 +222,7 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
 
     // ── Main brainstorm loop ────────────────────────────────────────────
     const startBrainstorm = useCallback(async () => {
-        if (!apiKey || !question.trim() || isRunning) return;
+        if (!question.trim() || isRunning) return;
 
         const effectiveRounds = Math.min(maxRounds, MAX_ROUNDS);
         abortRef.current = false;
@@ -275,12 +267,11 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
 
                 let sandraFull = '';
                 sandraFull = await streamTurn(
-                    apiKey,
                     sandraPrompt,
                     sandraHistory,
                     sandraInstruction,
-                    (delta) => {
-                        sandraPlaceholder.content += delta;
+                    (fullText) => {
+                        sandraPlaceholder.content = fullText;
                         updateLastTurn(sandraPlaceholder.content, true);
                     },
                 );
@@ -306,12 +297,11 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
 
                 let rafaFull = '';
                 rafaFull = await streamTurn(
-                    apiKey,
                     rafaPrompt,
                     rafaHistory,
                     rafaInstruction,
-                    (delta) => {
-                        rafaPlaceholder.content += delta;
+                    (fullText) => {
+                        rafaPlaceholder.content = fullText;
                         updateLastTurn(rafaPlaceholder.content, true);
                     },
                 );
@@ -334,12 +324,11 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
                 setTurns([...allTurns]);
 
                 const synthFull = await streamTurn(
-                    apiKey,
                     synthSystemPrompt,
                     [],
                     `Here is the discussion to synthesize:\n\n${discussionText}`,
-                    (delta) => {
-                        synthPlaceholder.content += delta;
+                    (fullText) => {
+                        synthPlaceholder.content = fullText;
                         updateLastTurn(synthPlaceholder.content, true);
                     },
                 );
@@ -356,7 +345,7 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
         } finally {
             setIsRunning(false);
         }
-    }, [apiKey, question, isRunning, maxRounds, sandraSystemPrompt, rafaSystemPrompt, updateLastTurn]);
+    }, [question, isRunning, maxRounds, sandraSystemPrompt, rafaSystemPrompt, updateLastTurn]);
 
     const handleStop = useCallback(() => {
         abortRef.current = true;
@@ -443,7 +432,7 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
                             </p>
                             <button
                                 onClick={startBrainstorm}
-                                disabled={!question.trim() || !apiKey}
+                                disabled={!question.trim()}
                                 className="flex items-center gap-1.5 px-4 py-2 bg-lemon-coral text-white font-display font-bold uppercase text-xs rounded-lg
                                            hover:bg-lemon-coral/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             >
@@ -451,11 +440,6 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
                                 Start Session
                             </button>
                         </div>
-                        {!apiKey && (
-                            <p className="text-[0.6rem] font-mono text-lemon-coral mt-1">
-                                No Gemini API key configured — go to Settings.
-                            </p>
-                        )}
                     </div>
                 )}
 

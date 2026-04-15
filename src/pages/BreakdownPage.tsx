@@ -29,7 +29,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { ELEMENT_CATEGORIES } from '@/data/element-categories';
-import { createBreakdownModel } from '@/lib/ai/gemini-client';
+import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
 import { processBreakdownBatch } from '@/lib/ai/batch-processor';
 import type { BatchProgress, FailedScene } from '@/lib/ai/batch-processor';
 import type { BreakdownElement, ElementCategoryId } from '@/types';
@@ -39,7 +39,6 @@ import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
-import { generateSceneBreakdown } from '@/lib/ai/gemini-client';
 
 // -----------------------------------------------------------------------
 // Main component
@@ -96,7 +95,7 @@ export function BreakdownPage() {
     // ---------------------------------------------------------------
 
     const runBreakdown = useCallback(async () => {
-        if (!apiKey || isRunning || scenes.length === 0) return;
+        if (isRunning || scenes.length === 0) return;
 
         const controller = new AbortController();
         abortRef.current = controller;
@@ -104,11 +103,9 @@ export function BreakdownPage() {
         setFailures([]);
 
         try {
-            const model = createBreakdownModel(apiKey);
             const scenesToProcess = sceneCap > 0 ? scenes.slice(0, sceneCap) : scenes;
             const rafaSkillContext = useAgentBrainStore.getState().getRafaSkillContext();
             const result = await processBreakdownBatch(
-                model,
                 scenesToProcess,
                 (p) => setProgress(p),
                 controller.signal,
@@ -125,7 +122,7 @@ export function BreakdownPage() {
             setIsRunning(false);
             abortRef.current = null;
         }
-    }, [apiKey, isRunning, scenes, sceneCap, setBreakdown]);
+    }, [isRunning, scenes, sceneCap, setBreakdown]);
 
     const stopBreakdown = useCallback(() => {
         abortRef.current?.abort();
@@ -136,15 +133,12 @@ export function BreakdownPage() {
     // ---------------------------------------------------------------
 
     const retryScene = useCallback(async (failed: FailedScene) => {
-        if (!apiKey) return;
         const scene = scenes.find((s) => s.sceneNumber === failed.sceneNumber);
         if (!scene) return;
 
         setRetrying((prev) => new Set(prev).add(failed.sceneNumber));
         try {
-            const model = createBreakdownModel(apiKey);
             const elements = await generateSceneBreakdown(
-                model,
                 scene.sceneNumber,
                 scene.content,
                 scene.slugline.raw,

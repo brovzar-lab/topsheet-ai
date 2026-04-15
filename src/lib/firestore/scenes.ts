@@ -15,6 +15,7 @@
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Scene } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 /** Max scenes per Firestore document. Keeps each doc well under 1MB. */
 const MAX_SCENES_PER_DOC = 80;
@@ -33,7 +34,7 @@ export async function saveScenes(
     if (scenes.length <= MAX_SCENES_PER_DOC) {
         // Fits in one document — simple path
         await setDoc(mainRef(uid, projectId), {
-            scenes,
+            scenes: stripUndefined(scenes),
             chunkCount: 1,
             _updatedAt: serverTimestamp(),
         });
@@ -48,7 +49,7 @@ export async function saveScenes(
 
     // Write main doc with first chunk + metadata
     await setDoc(mainRef(uid, projectId), {
-        scenes: chunks[0],
+        scenes: stripUndefined(chunks[0]),
         chunkCount: chunks.length,
         _updatedAt: serverTimestamp(),
     });
@@ -56,7 +57,7 @@ export async function saveScenes(
     // Write overflow chunks
     for (let i = 1; i < chunks.length; i++) {
         await setDoc(chunkRef(uid, projectId, i), {
-            scenes: chunks[i],
+            scenes: stripUndefined(chunks[i]!),
             _updatedAt: serverTimestamp(),
         });
     }

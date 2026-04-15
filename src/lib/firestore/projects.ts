@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Project } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 const projectsRef = (uid: string) =>
     collection(db, 'users', uid, 'projects');
@@ -16,10 +17,10 @@ const projectRef = (uid: string, projectId: string) =>
     doc(db, 'users', uid, 'projects', projectId);
 
 export async function saveProject(uid: string, project: Project): Promise<void> {
-    await setDoc(projectRef(uid, project.id), {
+    await setDoc(projectRef(uid, project.id), stripUndefined({
         ...project,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 export async function loadProjects(uid: string): Promise<Project[]> {

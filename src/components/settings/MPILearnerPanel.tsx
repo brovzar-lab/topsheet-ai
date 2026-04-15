@@ -47,7 +47,7 @@ export function MPILearnerPanel() {
             // Small delay so phase text renders
             await new Promise(r => setTimeout(r, 50));
             setParsePhase('AI extracting budget items…');
-            const result = await parseBudgetUpload(file, apiKey);
+            const result = await parseBudgetUpload(file);
             setParsePhase('Saving to database…');
             await addRecords(user.uid, result.matched);
             setLastResult(result);

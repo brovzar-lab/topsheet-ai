@@ -16,16 +16,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Bot, Send, Trash2, Copy, CheckCheck, ChevronRight, ChevronLeft,
-    AlertTriangle, FileText, Layers, DollarSign, Zap, Check, RotateCcw,
+    FileText, Layers, DollarSign, Zap, Check, RotateCcw,
     ArrowRightLeft,
 } from 'lucide-react';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { getSandraTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
+import { callLLM } from '@/lib/ai/proxyClient';
 import type { Scene, SceneBreakdown, BudgetDraft, ElementCategoryId } from '@/types';
 
 // -----------------------------------------------------------------------
@@ -525,8 +525,6 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
     /** When false (secondary agent), hides suggestion cards — only greeting + input shown. Default: true */
     isPrimary?: boolean;
 }) {
-    const apiKey = useSettingsStore((s) => s.geminiApiKey);
-
     // ── Persistent thread from Zustand store (survives page navigation) ──
     const rawMessages         = useChatStore((s) => s.sandraMessages);
     const setRawMessages      = useChatStore((s) => s.setSandraMessages);
@@ -582,30 +580,24 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
         question: string,
         targetSystemPrompt: string,
         targetHistory: Message[],
-        apiKeyVal: string,
     ): Promise<string> => {
-        const genAI = new GoogleGenerativeAI(apiKeyVal);
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
-            generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
-            safetySettings: [
-                { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            ],
-            systemInstruction: targetSystemPrompt,
-        });
-        const history = targetHistory
+        // Build conversation history into the prompt
+        const historyLines = targetHistory
             .filter(m => m.content && !m.crossAgent)
-            .map(m => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }],
-            }));
-        const chat = model.startChat({ history });
-        const result = await chat.sendMessage(question);
+            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`);
+        const fullPrompt = historyLines.length > 0
+            ? historyLines.join('\n\n') + '\n\nUser: ' + question
+            : question;
+
+        const result = await callLLM({
+            model: useSettingsStore.getState().getModelForRole('sandra'),
+            prompt: fullPrompt,
+            systemPrompt: targetSystemPrompt,
+            temperature: 0.3,
+            maxTokens: 4096,
+        });
         // Strip any block markers from Rafa's reply
-        return result.response.text()
+        return result.text
             .replace(/\[ACTIONS\][\s\S]*?(\[\/ACTIONS\]|$)/g, '')
             .replace(/\[CROSS_CONSULT\][\s\S]*?(\[\/CROSS_CONSULT\]|$)/g, '')
             .trim();
@@ -613,59 +605,32 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
 
     const sendMessage = useCallback(async (overrideText?: string) => {
         const text = (overrideText ?? input).trim();
-        if (!text || !apiKey || isLoading) return;
+        if (!text || isLoading) return;
 
         setMessagesStable(prev => [...prev, { role: 'user', content: text }]);
         if (!overrideText) setInput('');
         setIsLoading(true);
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({
-                // gemini-2.5-flash — best model available through the standard Google AI v1beta API.
-                model: 'gemini-2.5-flash',
-                generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
-                safetySettings: [
-                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                ],
-                systemInstruction: systemPrompt,
+            // Build conversation history into the prompt
+            const historyLines = messages
+                .filter(m => m.content && !m.crossAgent)
+                .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`);
+            const fullPrompt = historyLines.length > 0
+                ? historyLines.join('\n\n') + '\n\nUser: ' + text
+                : text;
+
+            const result = await callLLM({
+                model: useSettingsStore.getState().getModelForRole('sandra'),
+                prompt: fullPrompt,
+                systemPrompt,
+                temperature: 0.3,
+                maxTokens: 8192,
             });
 
-            const history = messages.map(m => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }],
-            }));
-
-            const chat = model.startChat({ history });
-
-            setMessagesStable(prev => [...prev, { role: 'assistant', content: '', actions: [] }]);
-            setIsLoading(false); // hide typing dots — streaming text is the live indicator
-
-            const stream = await chat.sendMessageStream(text);
-            let full = '';
-            for await (const chunk of stream.stream) {
-                const delta = chunk.text();
-                full += delta;
-                // Strip any in-progress [ACTIONS] block from the visible text while streaming
-                const visibleEnd = full.indexOf('[ACTIONS]');
-                const liveText = visibleEnd === -1 ? full : full.slice(0, visibleEnd);
-                setMessagesStable(prev => {
-                    const updated = [...prev];
-                    updated[updated.length - 1] = { role: 'assistant', content: liveText, actions: [] };
-                    return updated;
-                });
-            }
-
-            // Final parse: extract prose + actions + optional cross-consult request
-            const { prose, actions, crossConsult } = parseSandraResponse(full);
-            setMessagesStable(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: prose, actions };
-                return updated;
-            });
+            // Parse: extract prose + actions + optional cross-consult request
+            const { prose, actions, crossConsult } = parseSandraResponse(result.text);
+            setMessagesStable(prev => [...prev, { role: 'assistant', content: prose, actions }]);
 
             // ── Execute cross-consult if Sandra requested one ──
             if (crossConsult && rafaSystemPrompt) {
@@ -680,7 +645,6 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                         crossConsult.question,
                         rafaSystemPrompt,
                         rafaMessages as Message[],
-                        apiKey,
                     );
                     setMessagesStable(prev => {
                         const updated = [...prev];
@@ -715,7 +679,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
         } finally {
             setIsLoading(false);
         }
-    }, [input, apiKey, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult, setMessagesStable]);
+    }, [input, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult, setMessagesStable]);
 
     const clearChat = useCallback(() => {
         setMessages([]);
@@ -846,16 +810,8 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                 </div>
             )}
 
-            {/* ── No API key ── */}
-            {!apiKey && (
-                <div className="flex-1 flex flex-col items-center justify-center p-4 text-center gap-2">
-                    <AlertTriangle size={24} className="text-lemon-yellow" />
-                    <p className="text-xs text-lemon-text-muted">Add a Gemini API key in Settings to use Sandra.</p>
-                </div>
-            )}
-
             {/* ── Empty state ── */}
-            {apiKey && messages.length === 0 && !context && (
+            {messages.length === 0 && !context && (
                 <div className="flex-1 flex flex-col items-start justify-start p-3 gap-3 overflow-y-auto">
                     <div className="w-full text-center pt-4 pb-1">
                         <p className="text-xs font-display font-bold text-lemon-text-primary">Hey, I'm Sandra.</p>
@@ -917,8 +873,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
 
 
             {/* ── Messages ── */}
-            {apiKey && (
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
                     {messages.map((msg, i) => (
                         <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                             {/* Sandra avatar */}
@@ -982,34 +937,31 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                         </div>
                     )}
                 </div>
-            )}
 
             {/* ── Input ── */}
-            {apiKey && (
-                <div className="p-2.5 border-t border-lemon-gray-700 flex gap-2 items-end">
-                    <textarea
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                sendMessage();
-                            }
-                        }}
-                        placeholder="Ask Sandra… (Enter to send)"
-                        rows={2}
-                        className="flex-1 px-2.5 py-2 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary placeholder:text-lemon-text-muted focus:border-lemon-cyan focus:outline-none resize-none"
-                    />
-                    <button
-                        onClick={() => sendMessage()}
-                        disabled={!input.trim() || isLoading}
-                        className="p-2 bg-lemon-cyan text-lemon-black rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-                        title="Send (Enter)"
-                    >
-                        <Send size={12} />
-                    </button>
-                </div>
-            )}
+            <div className="p-2.5 border-t border-lemon-gray-700 flex gap-2 items-end">
+                <textarea
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    }}
+                    placeholder="Ask Sandra… (Enter to send)"
+                    rows={2}
+                    className="flex-1 px-2.5 py-2 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary placeholder:text-lemon-text-muted focus:border-lemon-cyan focus:outline-none resize-none"
+                />
+                <button
+                    onClick={() => sendMessage()}
+                    disabled={!input.trim() || isLoading}
+                    className="p-2 bg-lemon-cyan text-lemon-black rounded hover:bg-lemon-cyan-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                    title="Send (Enter)"
+                >
+                    <Send size={12} />
+                </button>
+            </div>
         </div>
     );
 }

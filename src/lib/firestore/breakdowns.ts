@@ -14,6 +14,7 @@
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { SceneBreakdown } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 /** Max scene breakdowns per Firestore document. Keeps each doc well under 1MB. */
 const MAX_BREAKDOWNS_PER_DOC = 50;
@@ -34,7 +35,7 @@ export async function saveBreakdown(
     if (entries.length <= MAX_BREAKDOWNS_PER_DOC) {
         // Fits in one document — simple path
         await setDoc(mainRef(uid, projectId), {
-            breakdown,
+            breakdown: stripUndefined(breakdown),
             chunkCount: 1,
             _updatedAt: serverTimestamp(),
         });
@@ -51,7 +52,7 @@ export async function saveBreakdown(
 
     // Write main doc with first chunk + metadata
     await setDoc(mainRef(uid, projectId), {
-        breakdown: chunks[0],
+        breakdown: stripUndefined(chunks[0]),
         chunkCount: chunks.length,
         _updatedAt: serverTimestamp(),
     });
@@ -59,7 +60,7 @@ export async function saveBreakdown(
     // Write overflow chunks
     for (let i = 1; i < chunks.length; i++) {
         await setDoc(chunkRef(uid, projectId, i), {
-            breakdown: chunks[i],
+            breakdown: stripUndefined(chunks[i]!),
             _updatedAt: serverTimestamp(),
         });
     }

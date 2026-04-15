@@ -107,13 +107,12 @@ export function ProjectNewPage() {
             };
             setParsed(data);
 
-            // Step 3 — AI analysis (if key available)
-            if (apiKey) {
+            // Step 3 — AI analysis via proxy
+            {
                 setStep('analyzing');
                 setProgress('Reading your screenplay…');
                 try {
                     const result = await analyzeScript(
-                        apiKey,
                         pdfResult.text,
                         data.sceneCount,
                         data.totalPages,
@@ -477,12 +476,7 @@ export function ProjectNewPage() {
                         )}
                     </div>
 
-                    {/* No API key warning */}
-                    {step === 'idle' && !apiKey && (
-                        <p className="mt-4 text-xs text-lemon-yellow/70 font-mono">
-                            ⚠ No Gemini API key — AI synopsis will be skipped. Add VITE_GEMINI_API_KEY to .env.local
-                        </p>
-                    )}
+                    {/* AI calls route through proxy — no client-side key needed */}
                 </>
             )}
         </div>

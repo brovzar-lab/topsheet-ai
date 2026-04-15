@@ -12,6 +12,7 @@
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ScheduleDraft } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 /** Rough bytes-per-shootday estimate for warning threshold */
 const WARN_THRESHOLD_DAYS = 200;
@@ -30,10 +31,10 @@ export async function saveSchedule(
             `Consider splitting into blocks.`
         );
     }
-    await setDoc(scheduleRef(uid, projectId), {
+    await setDoc(scheduleRef(uid, projectId), stripUndefined({
         ...draft,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 export async function loadSchedule(

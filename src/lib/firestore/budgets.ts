@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { BudgetDraft, BudgetLineItem } from '@/types';
+import { stripUndefined } from './strip-undefined';
 
 // ── Collection References ──────────────────────────────────────────────────
 
@@ -30,10 +31,10 @@ const lineItemRef = (uid: string, draftId: string, lineId: string) =>
 export async function saveDraftHeader(uid: string, draft: BudgetDraft): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lineItems, ...header } = draft;
-    await setDoc(draftRef(uid, draft.id), {
+    await setDoc(draftRef(uid, draft.id), stripUndefined({
         ...header,
         _updatedAt: serverTimestamp(),
-    });
+    }));
 }
 
 /** Save a single line item to the subcollection */
@@ -42,7 +43,7 @@ export async function saveLineItem(
     draftId: string,
     line: BudgetLineItem
 ): Promise<void> {
-    await setDoc(lineItemRef(uid, draftId, line.id), line);
+    await setDoc(lineItemRef(uid, draftId, line.id), stripUndefined(line));
 }
 
 /** Batch-save many line items — Firestore allows 500 ops per batch */
@@ -56,7 +57,7 @@ export async function bulkSaveLineItems(
         const batch = writeBatch(db);
         const chunk = lines.slice(i, i + BATCH_SIZE);
         for (const line of chunk) {
-            batch.set(lineItemRef(uid, draftId, line.id), line);
+            batch.set(lineItemRef(uid, draftId, line.id), stripUndefined(line));
         }
         await batch.commit();
     }

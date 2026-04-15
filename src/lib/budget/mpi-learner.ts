@@ -11,8 +11,9 @@
  */
 
 import ExcelJS from 'exceljs';
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 import { extractTextFromPDF } from '@/lib/parsers/pdf-parser';
+import { callLLM } from '@/lib/ai/proxyClient';
+import { useSettingsStore } from '@/stores/settings-store';
 import { MPI_DATA } from '@/data/mpi-data';
 import { getAllMPIItems } from '@/data/mpi-data';
 import type { LearnedMPIRecord, MPIUploadResult } from '@/types';
@@ -185,26 +186,9 @@ interface GeminiExtractedItem {
 }
 
 async function extractWithGemini(
-    apiKey: string,
     serializedContent: string,
     filename: string,
 ): Promise<{ items: GeminiExtractedItem[]; totalRows: number }> {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-            maxOutputTokens: 8192,
-        },
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
-    });
-
     const categoryContext = buildCategoryContext();
 
     const prompt = `You are an expert Mexican film/TV line producer. You are reading a production budget spreadsheet.
@@ -244,8 +228,14 @@ Return ONLY this JSON structure:
   "total_rows_scanned": 150
 }`;
 
-    const result = await model.generateContent(prompt);
-    let text = result.response.text().trim();
+    const result = await callLLM({
+        model: useSettingsStore.getState().getModelForRole('mpiLearner'),
+        prompt,
+        jsonMode: true,
+        temperature: 0.1,
+        maxTokens: 8192,
+    });
+    let text = result.text.trim();
     // Strip markdown fences if present
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
 
@@ -272,7 +262,6 @@ export { SUPPORTED_EXTENSIONS };
 
 export async function parseBudgetUpload(
     file: File,
-    apiKey: string,
 ): Promise<MPIUploadResult> {
     const filename = file.name;
     const now = new Date().toISOString();
@@ -285,7 +274,7 @@ export async function parseBudgetUpload(
     }
 
     // Step 2: Extract with Gemini AI
-    const extraction = await extractWithGemini(apiKey, serialized, filename);
+    const extraction = await extractWithGemini(serialized, filename);
 
     // Step 3: Match extracted items against MPI
     const matched: LearnedMPIRecord[] = [];
