@@ -29,7 +29,6 @@ export function DayGroup({
     onSetDayDate,
 }: {
     day: ShootDay;
-    projectId: string;
     onRemoveDay: (dayId: string) => void;
     expandedStripId: string | null;
     onToggleStrip: (stripId: string) => void;

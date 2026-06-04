@@ -17,7 +17,7 @@ export type ConflictSeverity = 'error' | 'warning' | 'info';
 
 export interface ScheduleConflict {
     id: string;
-    type: 'cast_double_book' | 'day_overloaded' | 'cast_unscheduled' | 'empty_day';
+    type: 'cast_double_book' | 'day_overloaded' | 'cast_unscheduled' | 'empty_day' | 'cast_fatigue';
     severity: ConflictSeverity;
     message: string;
     /** Affected day number (for UI scroll-to) */
@@ -112,7 +112,7 @@ export function detectConflicts(schedule: ScheduleDraft): ScheduleConflict[] {
                 if (consecutive >= MAX_CONSECUTIVE_WORK_DAYS) {
                     conflicts.push({
                         id: `conflict_${conflictId++}`,
-                        type: 'cast_double_book',
+                        type: 'cast_fatigue',
                         severity: 'warning',
                         message: `${char} works ${consecutive}+ consecutive days (Day ${sorted[i - consecutive + 1]} → ${sorted[i]})`,
                         dayNumber: sorted[i - consecutive + 1],

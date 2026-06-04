@@ -100,8 +100,10 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
         set((state) => {
             const schedule = state.schedules[projectId];
             if (!schedule) return state;
-            const nextNum = schedule.shootDays.length + 1;
-            const newDay = { id: `day_${nextNum}_${Date.now()}`, dayNumber: nextNum, strips: [], totalPages: 0, location: '' };
+            // Use max existing dayNumber + 1 to avoid duplicates after deletions
+            const maxDay = schedule.shootDays.reduce((m, d) => Math.max(m, d.dayNumber), 0);
+            const nextNum = maxDay + 1;
+            const newDay = { id: crypto.randomUUID(), dayNumber: nextNum, strips: [], totalPages: 0, location: '' };
             return { schedules: { ...state.schedules, [projectId]: { ...schedule, shootDays: [...schedule.shootDays, newDay] } } };
         });
         const s = get().schedules[projectId];
@@ -115,15 +117,20 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
             const dayIndex = schedule.shootDays.findIndex((d) => d.id === dayId);
             if (dayIndex === -1) return state;
             const removedDay = schedule.shootDays[dayIndex]!;
-            const remaining = schedule.shootDays.filter((d) => d.id !== dayId);
+            let remaining = schedule.shootDays.filter((d) => d.id !== dayId);
             if (removedDay.strips.length > 0) {
                 const targetIdx = Math.max(0, dayIndex - 1);
-                const target = remaining[targetIdx]!;
-                target.strips = [...target.strips, ...removedDay.strips];
-                target.totalPages = recalcDayPages(target.strips);
-                target.location = recalcDayLocation(target.strips);
+                // Create a NEW object — never mutate the previous state reference
+                const updatedTarget = {
+                    ...remaining[targetIdx]!,
+                    strips: [...remaining[targetIdx]!.strips, ...removedDay.strips],
+                };
+                updatedTarget.totalPages = recalcDayPages(updatedTarget.strips);
+                updatedTarget.location = recalcDayLocation(updatedTarget.strips);
+                remaining = remaining.map((d, i) => (i === targetIdx ? updatedTarget : d));
             }
-            remaining.forEach((d, i) => { d.dayNumber = i + 1; });
+            // Re-sequence dayNumber immutably
+            remaining = remaining.map((d, i) => ({ ...d, dayNumber: i + 1 }));
             return { schedules: { ...state.schedules, [projectId]: { ...schedule, shootDays: remaining } } };
         });
         const s = get().schedules[projectId];

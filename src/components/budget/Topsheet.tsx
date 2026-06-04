@@ -2,8 +2,7 @@
  * Topsheet — visual budget summary with section bars and grand total.
  */
 
-import { calcSectionTotals } from '@/lib/budget/calculator';
-import { formatMXN, formatMXNShort } from '@/lib/budget/calculator';
+import { calcSectionTotals, formatMXN, formatMXNShort } from '@/lib/budget/calculator';
 import type { BudgetDraft, BudgetSection } from '@/types';
 
 const SECTION_COLORS: Record<BudgetSection, string> = {

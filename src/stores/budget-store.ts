@@ -166,7 +166,7 @@ export const useBudgetStore = create<BudgetState>()(
                 if (lineSet.has(li.id)) {
                     copies.push({
                         ...li,
-                        id: `dup_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                        id: crypto.randomUUID(),
                         description: `${li.description} (copy)`,
                     });
                 }

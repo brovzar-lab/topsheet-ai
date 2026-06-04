@@ -145,6 +145,8 @@ export async function createEpisodes(
 ): Promise<Episode[]> {
     const now = new Date().toISOString();
     const episodes: Episode[] = [];
+    // Use a single atomic batch instead of N sequential round-trips
+    const batch = writeBatch(db);
 
     for (let i = 1; i <= count; i++) {
         const id = crypto.randomUUID();
@@ -161,13 +163,13 @@ export async function createEpisodes(
             createdAt: now,
             updatedAt: now,
         };
-        await setDoc(episodeDocRef(uid, seriesId, id), stripUndefined({
-            ...ep,
-            _updatedAt: serverTimestamp(),
-        }));
+        // Note: serverTimestamp() cannot be used in writeBatch set() calls.
+        // createdAt / updatedAt ISO strings are stored instead.
+        batch.set(episodeDocRef(uid, seriesId, id), stripUndefined(ep));
         episodes.push(ep);
     }
 
+    await batch.commit();
     return episodes;
 }
 

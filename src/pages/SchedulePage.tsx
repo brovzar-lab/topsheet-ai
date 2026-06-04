@@ -173,10 +173,15 @@ export function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seriesId, user?.uid]);
 
-    // Ref guard: ensure auto-generation runs at most once per component lifecycle.
-    // Using a ref prevents the effect from cycling when setSchedule updates the store,
-    // which would otherwise toggle `schedule` between null/defined on each render.
+    // Ref guard: ensure auto-generation runs at most once per project.
+    // Using a ref prevents the effect from cycling when setSchedule updates the store.
     const didAutoGenerate = useRef(false);
+
+    // Reset the guard whenever the project changes so a new project can auto-generate.
+    useEffect(() => {
+        didAutoGenerate.current = false;
+    }, [projectId]);
+
     useEffect(() => {
         if (didAutoGenerate.current) return;
         if (!projectId || scenes.length === 0) return;

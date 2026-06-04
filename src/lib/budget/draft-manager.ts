@@ -18,7 +18,7 @@ import { calcSectionTotals, calcContingency } from './calculator';
 export function cloneDraft(source: BudgetDraft, newName?: string): BudgetDraft {
     const lineItems = source.lineItems.map((item) => ({
         ...item,
-        id: `li_clone_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: crypto.randomUUID(),
     }));
 
     const sectionTotals = calcSectionTotals(lineItems);

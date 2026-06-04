@@ -459,6 +459,7 @@ export function BudgetPage() {
                             src={pdfPreviewUrl}
                             className="w-full h-full rounded-lg border border-lemon-gray-700"
                             title="Budget PDF Preview"
+                            sandbox=""
                         />
                     </div>
                 </div>

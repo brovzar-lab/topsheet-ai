@@ -53,7 +53,7 @@ export function StripSynopsis({
         if (!sceneContent) return null;
         const trimmed = sceneContent.slice(0, 300).trim();
         const lastSpace = trimmed.lastIndexOf(' ');
-        return lastSpace > 200 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…';
+        return lastSpace > 0 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…';
     }, [sceneContent]);
 
     return (

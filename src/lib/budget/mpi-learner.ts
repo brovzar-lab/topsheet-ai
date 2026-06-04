@@ -159,6 +159,8 @@ const MATCH_THRESHOLD = 0.25;
 
 function bestMatch(description: string) {
     const allItems = getAllMPIItems();
+    // Guard: MPI database is empty (first session before any data is loaded)
+    if (allItems.length === 0) return null;
     let best = { item: allItems[0]!, score: 0 };
     for (const mpi of allItems) {
         // Match against both the MPI item name and any Spanish aliases
