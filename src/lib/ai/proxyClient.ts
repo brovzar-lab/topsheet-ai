@@ -19,6 +19,8 @@
  */
 
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
+import { getIdToken } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 const PROXY_URL = import.meta.env.DEV
   ? 'http://127.0.0.1:5001/topsheet-ai/us-central1/llmProxy'
@@ -57,10 +59,25 @@ export interface LLMResponse {
 }
 
 // -----------------------------------------------------------------------
-// Proxy availability cache — skip fetch after first connection failure
+// Proxy availability cache — with TTL so a single network blip does not
+// permanently activate the key-exposure fallback for the entire session.
+// After PROXY_RETRY_MS milliseconds the proxy will be retried.
 // -----------------------------------------------------------------------
 
+const PROXY_RETRY_MS = 60_000; // 60 s
 let _proxyAvailable: boolean | null = null;
+let _proxyFailedAt: number | null = null;
+
+function isProxyDown(): boolean {
+  if (_proxyAvailable !== false) return false;
+  // Reset after TTL so transient outages don't permanently fall back
+  if (_proxyFailedAt !== null && Date.now() - _proxyFailedAt > PROXY_RETRY_MS) {
+    _proxyAvailable = null;
+    _proxyFailedAt = null;
+    return false;
+  }
+  return true;
+}
 
 // -----------------------------------------------------------------------
 // Provider detection helpers
@@ -107,6 +124,13 @@ function getGeminiClient(apiKey: string): GoogleGenerativeAI {
 }
 
 async function callGeminiDirect(options: LLMRequest): Promise<LLMResponse> {
+  // Direct API calls embed keys in the browser bundle — only allowed in local dev.
+  if (!import.meta.env.DEV) {
+    throw new Error(
+      'Direct Gemini fallback is disabled in production. ' +
+      'Ensure the Firebase emulator or deployed Cloud Function is reachable.',
+    );
+  }
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
   if (!apiKey) {
     throw new Error(
@@ -144,6 +168,13 @@ async function callGeminiDirect(options: LLMRequest): Promise<LLMResponse> {
 // -----------------------------------------------------------------------
 
 async function callClaudeDirect(options: LLMRequest): Promise<LLMResponse> {
+  // Direct API calls embed keys in the browser bundle — only allowed in local dev.
+  if (!import.meta.env.DEV) {
+    throw new Error(
+      'Direct Anthropic fallback is disabled in production. ' +
+      'Ensure the Firebase emulator or deployed Cloud Function is reachable.',
+    );
+  }
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
   if (!apiKey) {
     throw new Error(
@@ -237,8 +268,8 @@ function callDirectFallback(options: LLMRequest): Promise<LLMResponse> {
  * Anthropic prompt caching (~90% cheaper on cached input tokens).
  */
 export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
-  // If we already know the proxy is down, skip straight to direct
-  if (_proxyAvailable === false) {
+  // If the proxy is known-down (within TTL), skip straight to direct fallback
+  if (isProxyDown()) {
     return callDirectFallback(options);
   }
 
@@ -288,9 +319,24 @@ export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
   }
 
   try {
+    // Attach Firebase ID token so the Cloud Function can verify the caller
+    let authHeader = '';
+    try {
+      if (auth.currentUser) {
+        const idToken = await getIdToken(auth.currentUser);
+        authHeader = `Bearer ${idToken}`;
+      }
+    } catch {
+      // If token fetch fails (logged-out race condition), proceed without auth;
+      // the Cloud Function will return 401 and we surface that error normally.
+    }
+
     const response = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
       body: JSON.stringify(body),
     });
 
@@ -327,6 +373,7 @@ export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
     // TypeError = network-level failure (connection refused, DNS error, etc.)
     if (err instanceof TypeError) {
       _proxyAvailable = false;
+      _proxyFailedAt = Date.now();
       return callDirectFallback(options);
     }
     throw err;

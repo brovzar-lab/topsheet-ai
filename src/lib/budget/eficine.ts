@@ -3,13 +3,13 @@
  *
  * EFICINE (Estímulo Fiscal a Proyectos de Inversión en la Producción
  * Cinematográfica Nacional) provides a tax credit of up to 10% of the
- * total income tax liability for investments in Mexican film production.
+ * investor's income tax liability for investments in Mexican film production.
  *
- * Key rules:
+ * Art. 189 LISR — Key rules:
+ * - Credit = 10% of eligible production expenses in Mexico
  * - Maximum credit per project: $20,000,000 MXN (2,000,000,000 centavos)
  * - Maximum total annual pool: $500,000,000 MXN
  * - Investment must be 100% in eligible production expenses in Mexico
- * - Credit = min(eligible investment, cap per project)
  * - Eligible expenses: crew salaries, equipment rental, location fees,
  *   post-production, distribution preparation (all while in Mexico)
  *
@@ -19,7 +19,10 @@
 import type { BudgetDraft, BudgetSection } from '@/types';
 import { getSection } from './calculator';
 
-/** Maximum EFICINE credit per project in centavos */
+/** EFICINE credit rate per Art. 189 LISR: 10% of eligible spend */
+const EFICINE_CREDIT_RATE = 0.10;
+
+/** Maximum EFICINE credit per project in centavos ($20,000,000 MXN) */
 const MAX_CREDIT_CENTAVOS = 2_000_000_000; // $20,000,000 MXN
 
 /** EFICINE-eligible budget category codes */
@@ -52,7 +55,7 @@ export interface EFICINEResult {
     eligibleExpensesCentavos: number;
     /** Percentage of budget that is eligible */
     eligiblePercent: number;
-    /** Calculated credit (capped at MAX_CREDIT_CENTAVOS) */
+    /** Calculated credit (10% of eligible, capped at MAX_CREDIT_CENTAVOS) */
     creditCentavos: number;
     /** Whether the credit was capped */
     wasCapped: boolean;
@@ -104,7 +107,8 @@ export function calculateEFICINE(draft: BudgetDraft): EFICINEResult {
         }
     }
 
-    const rawCredit = eligibleExpensesCentavos;
+    // Art. 189 LISR: credit = 10% of eligible spend, capped at $20M MXN
+    const rawCredit = Math.round(eligibleExpensesCentavos * EFICINE_CREDIT_RATE);
     const creditCentavos = Math.min(rawCredit, MAX_CREDIT_CENTAVOS);
     const wasCapped = rawCredit > MAX_CREDIT_CENTAVOS;
     const eligiblePercent = totalBudgetCentavos > 0

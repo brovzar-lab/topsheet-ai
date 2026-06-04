@@ -155,7 +155,7 @@ export function BreakdownPage() {
                 return next;
             });
         }
-    }, [apiKey, scenes, setBreakdown]);
+    }, [scenes, setBreakdown]);
 
     // ---------------------------------------------------------------
     // Open Line Producer with scene error context

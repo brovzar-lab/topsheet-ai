@@ -4,6 +4,13 @@
  * Forwards chat completion requests to the shared LiteLLM server.
  * API keys never touch the browser — they live in functions/.env.
  *
+ * Auth
+ * ────
+ * Every request must carry a valid Firebase ID token in the Authorization header:
+ *   Authorization: Bearer <firebase-id-token>
+ * The token is verified with the Firebase Admin SDK before any LLM call is made.
+ * Unauthenticated requests are rejected with HTTP 401.
+ *
  * Prompt Caching
  * ─────────────
  * When the client sends `body.system` as a content-block array
@@ -14,10 +21,18 @@
 
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { defineString } from 'firebase-functions/params';
+import * as admin from 'firebase-admin';
 import cors = require('cors');
+
+// Initialise Admin SDK (idempotent — safe to call multiple times)
+if (!admin.apps.length) admin.initializeApp();
 
 const LITELLM_BASE_URL = defineString('LITELLM_BASE_URL');
 const LITELLM_API_KEY = defineString('LITELLM_API_KEY');
+
+// Safety limits — prevent cost-amplification attacks
+const MAX_TOKENS_LIMIT = 16_000;
+const MAX_MESSAGES = 50;
 
 const corsHandler = cors({
   origin: [
@@ -27,7 +42,7 @@ const corsHandler = cors({
     /127\.0\.0\.1:\d+$/,
   ],
   methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 3600,
 });
 
@@ -37,14 +52,36 @@ export const llmProxy = onRequest(
     memory: '256MiB',
     maxInstances: 50,
     region: 'us-central1',
-    invoker: 'public', // Required for Firebase Hosting rewrites (allows unauthenticated calls)
+    // invoker: 'public' is required so Firebase Hosting rewrites can reach the function.
+    // Auth is enforced inside the handler via Firebase ID-token verification — NOT via IAM.
+    invoker: 'public',
   },
   (req, res) => {
     corsHandler(req, res, async () => {
+      // Handle CORS preflight
+      if (req.method === 'OPTIONS') {
+        res.status(204).send('');
+        return;
+      }
+
       if (req.method !== 'POST') {
         res.status(405).json({ error: 'Method not allowed' });
         return;
       }
+
+      // ── Auth check ────────────────────────────────────────────────────────
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Missing or malformed Authorization header' });
+        return;
+      }
+      try {
+        await admin.auth().verifyIdToken(authHeader.slice('Bearer '.length));
+      } catch {
+        res.status(401).json({ error: 'Invalid or expired Firebase ID token' });
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       try {
         const {
@@ -58,6 +95,20 @@ export const llmProxy = onRequest(
 
         if (!model || !messages) {
           throw new HttpsError('invalid-argument', 'model and messages are required');
+        }
+
+        // Payload safety limits — reject requests that could rack up excessive cost
+        if (!Array.isArray(messages) || messages.length > MAX_MESSAGES) {
+          throw new HttpsError(
+            'invalid-argument',
+            `messages must be an array with at most ${MAX_MESSAGES} entries`,
+          );
+        }
+        if (max_tokens !== undefined && max_tokens > MAX_TOKENS_LIMIT) {
+          throw new HttpsError(
+            'invalid-argument',
+            `max_tokens must not exceed ${MAX_TOKENS_LIMIT}`,
+          );
         }
 
         const baseUrl = LITELLM_BASE_URL.value();

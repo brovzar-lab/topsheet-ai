@@ -197,9 +197,15 @@ export const useBudgetStore = create<BudgetState>()(
         }),
         {
             name: 'topsheet-budgets',
-            version: 1,
+            version: 2,
+            // Exclude lineItems from localStorage — they can be megabytes and are
+            // already persisted in Firestore. Only draft metadata (headers) is kept
+            // locally so draft selectors survive page refresh without a Firestore round-trip.
             partialize: (state) => ({
-                drafts: state.drafts,
+                drafts: state.drafts.map(({ lineItems: _lineItems, ...header }) => ({
+                    ...header,
+                    lineItems: [], // Reload from Firestore on project open
+                })),
             }),
         }
     )

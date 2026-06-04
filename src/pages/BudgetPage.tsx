@@ -4,7 +4,7 @@
  * Layout: Topsheet summary + line-item table + draft management.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSearchParamState } from '@/hooks/useSearchParamState';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { SeriesEpisodeBudgetPage } from './SeriesEpisodeBudgetPage';
@@ -49,12 +49,13 @@ export function BudgetPage() {
     const isLoadingProjects = useProjectStore((s) => s.isLoadingProjects);
     const breakdowns = useBreakdownStore((s) => s.breakdowns);
     const schedule = useScheduleStore((s) => s.getSchedule(projectId ?? ''));
-    const { addDraft, getDraftsForProject } = useBudgetStore();
+    const allDrafts = useBudgetStore((s) => s.drafts);
+    const { addDraft } = useBudgetStore();
     const settings = useSettingsStore();
 
     const projectDrafts = useMemo(
-        () => getDraftsForProject(projectId ?? '').sort((a, b) => b.version - a.version),
-        [projectId, getDraftsForProject],
+        () => allDrafts.filter((d) => d.projectId === (projectId ?? '')).sort((a, b) => b.version - a.version),
+        [projectId, allDrafts],
     );
 
     const [selectedDraftId, setSelectedDraftId] = useSearchParamState(
@@ -73,6 +74,15 @@ export function BudgetPage() {
     const [brainstormOpen, setBrainstormOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
+
+    // Revoke blob URL when component unmounts to prevent memory leaks
+    useEffect(() => {
+        return () => {
+            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+        };
+        // pdfPreviewUrl is intentionally excluded — we only want cleanup on unmount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const selectedDraft = projectDrafts.find((d) => d.id === selectedDraftId) ?? projectDrafts[0];
     const compareDraft = projectDrafts.find((d) => d.id === compareDraftId);
@@ -315,6 +325,8 @@ export function BudgetPage() {
                         <button
                             onClick={async () => {
                                 if (!selectedDraft) return;
+                                // Revoke any previous preview blob to prevent memory leaks
+                                if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
                                 const blob = await generateBudgetPDFBlob(selectedDraft, project?.title ?? `Project_${projectId}`);
                                 const url = URL.createObjectURL(blob);
                                 setPdfPreviewUrl(url);

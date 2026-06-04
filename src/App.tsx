@@ -4,6 +4,11 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { AuthGate } from './components/AuthGate';
 import { Loader2 } from 'lucide-react';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useAuthStore } from './stores/auth-store';
+import { useProjectStore } from './stores/project-store';
+import { useSeriesStore } from './stores/series-store';
+import { ProjectLoader } from './components/ProjectLoader';
 
 // Route-level pages — lazy loaded so each route only ships what it needs
 const HomeScreen = lazy(() => import('./pages/HomeScreen').then(m => ({ default: m.HomeScreen })));
@@ -30,11 +35,6 @@ function PageLoader() {
         </div>
     );
 }
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useAuthStore } from './stores/auth-store';
-import { useProjectStore } from './stores/project-store';
-import { useSeriesStore } from './stores/series-store';
-import { ProjectLoader } from './components/ProjectLoader';
 
 
 const VALID_TABS = ['breakdown', 'schedule', 'budget', 'doods', 'elements', 'calendar'] as const;

@@ -1,4 +1,4 @@
-import { Check, AlertTriangle, Circle, XCircle } from 'lucide-react';
+import { Check, CheckCircle, Circle, XCircle } from 'lucide-react';
 
 export type SceneStatus = 'reviewed' | 'done' | 'pending' | 'error';
 
@@ -7,7 +7,8 @@ export function SceneStatusIcon({ status }: { status: SceneStatus }) {
         case 'reviewed':
             return <Check size={14} className="text-lemon-cyan flex-shrink-0" />;
         case 'done':
-            return <AlertTriangle size={14} className="text-lemon-yellow flex-shrink-0" />;
+            // 'done' = breakdown complete — use a filled check circle, distinct from 'reviewed'
+            return <CheckCircle size={14} className="text-green-400 flex-shrink-0" />;
         case 'error':
             return <XCircle size={14} className="text-lemon-coral flex-shrink-0" />;
         case 'pending':
