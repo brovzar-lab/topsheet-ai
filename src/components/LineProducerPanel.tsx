@@ -595,6 +595,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
             systemPrompt: targetSystemPrompt,
             temperature: 0.3,
             maxTokens: 4096,
+            cacheSystemPrompt: true,  // system prompt contains full screenplay + elements — cache it
         });
         // Strip any block markers from Rafa's reply
         return result.text
@@ -626,6 +627,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                 systemPrompt,
                 temperature: 0.3,
                 maxTokens: 8192,
+                cacheSystemPrompt: true,  // system prompt contains full screenplay + elements — cache it
             });
 
             // Parse: extract prose + actions + optional cross-consult request

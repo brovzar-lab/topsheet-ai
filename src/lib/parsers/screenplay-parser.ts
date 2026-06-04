@@ -21,13 +21,17 @@ const LINES_PER_PAGE = 55;
  * near the start, optionally preceded by a scene number.
  *
  * This catches ALL standard formats:
- *   - "INT. HOUSE - DAY"            (EN standard)
+ *   - "INT. HOUSE - DAY"                (EN standard, no number)
  *   - "134  EXT. CLINIC / BRASIL – DAY  134"  (EN numbered, trailing #)
- *   - "123H  INT. SALÓN DE CLASES DE LA UNAM. DÍA  123H" (ES with periods)
- *   - "EXT. PLAYA - NOCHE"          (ES with dash)
- *   - "INT/EXT. CAR - CONTINUOUS"   (combo)
+ *   - "123H  INT. SALON. DIA  123H"     (ES with periods)
+ *   - "EXT. PLAYA - NOCHE"              (ES with dash)
+ *   - "INT/EXT. CAR - CONTINUOUS"       (combo)
+ *   - "80INT. FOOD MART - SNACKS"       (number glued to INT — pdfjs artifact)
+ *
+ * Key: the trailing \s+ after the scene number is replaced with \s* + lookahead
+ * so that a number glued directly onto INT/EXT (e.g. "80INT.") still matches.
  */
-const SCENE_DETECT_RE = /^\s*(?:(?:SCENE\s+)?(\d+[A-Z]{0,2})\s*[.:\-)]*\s+)?(INT(?:\s*\/\s*EXT)?|EXT(?:\s*\/\s*INT)?)\s*[.]\s*(.+?)\s*$/i;
+const SCENE_DETECT_RE = /^\s*(?:(?:SCENE\s+)?(\d+[A-Z]{0,2})\s*[.:\-)]*\s*(?=INT|EXT))?(INT(?:\s*\/\s*EXT)?|EXT(?:\s*\/\s*INT)?)\s*[.]\s*(.+?)\s*$/i;
 
 /**
  * Time-of-day keywords (EN + ES) — checked against the last segment of a slugline.
@@ -222,6 +226,61 @@ function linesToEighths(lineCount: number): number {
     return Math.max(1, eighths);
 }
 
+/**
+ * Given a lineToPage mapping (lineIndex -> 1-based PDF page number) and the
+ * start/end lines of a scene, return its length in eighths of a page.
+ *
+ * We count how many PDF pages the scene spans and convert to eighths.
+ * A scene that starts and ends on the same page = 1–8 eighths (proportional
+ * to line count within that page). Scenes spanning multiple pages get
+ * 8 eighths per full page plus a partial-page estimate.
+ */
+function sceneLengthInEighths(
+    startLine: number,
+    endLine: number,
+    lineToPage: number[],
+    pageLineRanges: Array<{ start: number; end: number }>,
+): number {
+    if (lineToPage.length === 0) {
+        return linesToEighths(endLine - startLine);
+    }
+
+    const startPage = lineToPage[startLine] ?? lineToPage[lineToPage.length - 1] ?? 1;
+    const endPage   = lineToPage[endLine]   ?? lineToPage[lineToPage.length - 1] ?? 1;
+
+    if (startPage === endPage) {
+        // Scene fits within one page — estimate from line fraction
+        const range = pageLineRanges[startPage - 1];
+        if (range && range.end > range.start) {
+            const pageLinesTotal = range.end - range.start;
+            const sceneLinesOnPage = Math.min(endLine, range.end) - Math.max(startLine, range.start);
+            const fraction = Math.max(0, sceneLinesOnPage) / pageLinesTotal;
+            return Math.max(1, Math.round(fraction * 8));
+        }
+        return 1;
+    }
+
+    // Scene spans multiple pages: 8 eighths per full page
+    const fullPages = endPage - startPage - 1;          // complete pages in between
+
+    // Fraction of the first page (from scene start to end of that page)
+    const firstPageRange = pageLineRanges[startPage - 1];
+    const firstFraction = firstPageRange && firstPageRange.end > firstPageRange.start
+        ? (firstPageRange.end - startLine) / (firstPageRange.end - firstPageRange.start)
+        : 0.5;
+
+    // Fraction of the last page (from start of that page to scene end)
+    const lastPageRange = pageLineRanges[endPage - 1];
+    const lastFraction = lastPageRange && lastPageRange.end > lastPageRange.start
+        ? (endLine - lastPageRange.start) / (lastPageRange.end - lastPageRange.start)
+        : 0.5;
+
+    const totalEighths = Math.round(
+        (firstFraction + fullPages + lastFraction) * 8,
+    );
+    return Math.max(1, totalEighths);
+}
+
 // ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
@@ -232,10 +291,38 @@ export interface ScreenplayParseResult {
     characterList: string[];
 }
 
-export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayParseResult {
+export function parseScreenplay(
+    text: string,
+    pdfPageCount: number,
+    /** Per-page text from pdfjs (pages[0] = page 1). Used for accurate page-count calculation. */
+    pdfPages?: string[],
+): ScreenplayParseResult {
     const lines = text.split('\n');
     const scenes: Scene[] = [];
     const allCharacters = new Set<string>();
+
+    // ── Build lineToPage[] for accurate page-count calculation ──────────────
+    // lineToPage[i] = 1-based PDF page number that line i belongs to.
+    // pageLineRanges[p] = { start, end } line indices for page p+1.
+    const lineToPage: number[] = [];
+    const pageLineRanges: Array<{ start: number; end: number }> = [];
+
+    if (pdfPages && pdfPages.length > 0) {
+        let lineIdx = 0;
+        for (let p = 0; p < pdfPages.length; p++) {
+            const pageLines = (pdfPages[p] ?? '').split('\n');
+            const pageStart = lineIdx;
+            for (let l = 0; l < pageLines.length; l++) {
+                lineToPage[lineIdx] = p + 1;  // 1-based page number
+                lineIdx++;
+            }
+            pageLineRanges.push({ start: pageStart, end: lineIdx - 1 });
+        }
+        // Fill any remaining lines (shouldn't happen, but safety net)
+        while (lineToPage.length < lines.length) {
+            lineToPage.push(pdfPageCount);
+        }
+    }
 
     interface SceneStart {
         lineIndex: number;
@@ -251,8 +338,11 @@ export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayP
         const line = lines[i]!;
         const match = line.match(SCENE_DETECT_RE);
         if (match && match[2] && match[3]) {
+            // Use the explicit scene number if the PDF has one; otherwise auto-increment.
+            // autoNumber only advances when there is no explicit number, so gaps or
+            // pdfjs merging artifacts don't cause drift.
             const sceneNumber = match[1] || String(autoNumber);
-            autoNumber++;
+            if (!match[1]) autoNumber++;
 
             sceneStarts.push({
                 lineIndex: i,
@@ -262,8 +352,6 @@ export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayP
             });
         }
     }
-
-
 
     // Build scenes from the gaps between headings
     for (let s = 0; s < sceneStarts.length; s++) {
@@ -279,8 +367,10 @@ export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayP
         const characters = extractCharacters(contentLines);
         characters.forEach((c) => allCharacters.add(c));
 
-        const totalLines = endLine - startLine;
-        const pageCount = linesToEighths(totalLines);
+        // Page count: use PDF page positions when available, fall back to line estimate
+        const pageCount = lineToPage.length > 0
+            ? sceneLengthInEighths(startLine, endLine, lineToPage, pageLineRanges)
+            : linesToEighths(endLine - startLine);
 
         scenes.push({
             sceneNumber: start.sceneNumber,
@@ -299,3 +389,4 @@ export function parseScreenplay(text: string, pdfPageCount: number): ScreenplayP
         characterList: Array.from(allCharacters).sort(),
     };
 }
+

@@ -8,6 +8,14 @@
  *
  * In dev:  http://127.0.0.1:5001/topsheet-ai/us-central1/llmProxy
  * In prod: /api/llm (Firebase Hosting rewrite)
+ *
+ * Prompt Caching
+ * ─────────────
+ * Set `cacheSystemPrompt: true` on any call with a large, stable system prompt
+ * (Rafa / Sandra chats with the full screenplay injected). This adds
+ * `cache_control: { type: "ephemeral" }` to the system block, which:
+ *   • Anthropic / Claude: saves ~90% on cached input tokens (5-min TTL per write).
+ *   • Gemini via LiteLLM: no-op — LiteLLM ignores unknown fields gracefully.
  */
 
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
@@ -24,6 +32,16 @@ export interface LLMRequest {
   jsonMode?: boolean;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * When true, marks the system prompt with Anthropic's
+   * `cache_control: { type: "ephemeral" }` so repeated turns reuse the
+   * cached KV prefix (~90% cheaper on cached tokens, up to 2× faster).
+   *
+   * Use for Rafa / Sandra chats where the large screenplay-injected system
+   * prompt is stable across all turns in a conversation.
+   * No-op for Gemini models.
+   */
+  cacheSystemPrompt?: boolean;
 }
 
 export interface LLMResponse {
@@ -31,6 +49,10 @@ export interface LLMResponse {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    /** Anthropic: tokens served from prompt cache (billed at ~10% of normal) */
+    cache_read_tokens?: number;
+    /** Anthropic: tokens written to prompt cache (billed at ~125% of normal, one-time) */
+    cache_creation_tokens?: number;
   };
 }
 
@@ -130,20 +152,31 @@ async function callClaudeDirect(options: LLMRequest): Promise<LLMResponse> {
     );
   }
 
+  // System prompt — use content-block array form so we can attach cache_control.
+  // Anthropic requires the array form for prompt caching on the system field.
+  type SystemBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
+  let systemField: string | SystemBlock[] | undefined;
+
+  if (options.systemPrompt) {
+    let sysText = options.systemPrompt;
+    if (options.jsonMode) sysText += '\n\nYou must respond with valid JSON only. No markdown fences, no explanation.';
+    systemField = [
+      {
+        type: 'text',
+        text: sysText,
+        ...(options.cacheSystemPrompt ? { cache_control: { type: 'ephemeral' } } : {}),
+      },
+    ];
+  } else if (options.jsonMode) {
+    systemField = 'You must respond with valid JSON only. No markdown fences, no explanation.';
+  }
+
   const body: Record<string, unknown> = {
     model: stripAnthropicPrefix(options.model),
     max_tokens: options.maxTokens ?? 4096,
     messages: [{ role: 'user', content: options.prompt }],
+    ...(systemField ? { system: systemField } : {}),
   };
-
-  // System prompt — Anthropic uses a top-level `system` field, not a system role
-  if (options.systemPrompt) {
-    let sys = options.systemPrompt;
-    if (options.jsonMode) sys += '\n\nYou must respond with valid JSON only. No markdown fences, no explanation.';
-    body.system = sys;
-  } else if (options.jsonMode) {
-    body.system = 'You must respond with valid JSON only. No markdown fences, no explanation.';
-  }
 
   if (options.temperature !== undefined) body.temperature = options.temperature;
 
@@ -172,6 +205,8 @@ async function callClaudeDirect(options: LLMRequest): Promise<LLMResponse> {
       ? {
           input_tokens: data.usage.input_tokens ?? 0,
           output_tokens: data.usage.output_tokens ?? 0,
+          cache_read_tokens: data.usage.cache_read_input_tokens ?? 0,
+          cache_creation_tokens: data.usage.cache_creation_input_tokens ?? 0,
         }
       : undefined,
   };
@@ -197,6 +232,9 @@ function callDirectFallback(options: LLMRequest): Promise<LLMResponse> {
 /**
  * Call an LLM through the server-side proxy.
  * Falls back to direct provider API if the proxy is unreachable.
+ *
+ * Set `cacheSystemPrompt: true` for large, stable system prompts to enable
+ * Anthropic prompt caching (~90% cheaper on cached input tokens).
  */
 export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
   // If we already know the proxy is down, skip straight to direct
@@ -204,10 +242,31 @@ export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
     return callDirectFallback(options);
   }
 
-  const messages: Array<{ role: string; content: string }> = [];
+  // ── Build system content ────────────────────────────────────────────────
+  // For Claude + cacheSystemPrompt: array form with cache_control so LiteLLM
+  // forwards it to Anthropic verbatim. For Gemini: plain string.
+  type SystemBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
+
+  const useCache = options.cacheSystemPrompt && isClaudeModel(options.model);
+  let systemField: string | SystemBlock[] | undefined;
 
   if (options.systemPrompt) {
-    messages.push({ role: 'system', content: options.systemPrompt });
+    let sysText = options.systemPrompt;
+    if (options.jsonMode && isClaudeModel(options.model)) {
+      sysText += '\n\nYou must respond with valid JSON only. No markdown fences, no explanation.';
+    }
+    systemField = useCache
+      ? [{ type: 'text', text: sysText, cache_control: { type: 'ephemeral' } }]
+      : sysText;
+  }
+
+  // ── Build messages (OpenAI-compatible for LiteLLM) ───────────────────────
+  const messages: Array<{ role: string; content: string }> = [];
+
+  // For the string form, use the system role message.
+  // For the array+cache form, we pass system separately via body.system.
+  if (systemField && typeof systemField === 'string') {
+    messages.push({ role: 'system', content: systemField });
   }
   messages.push({ role: 'user', content: options.prompt });
 
@@ -215,6 +274,12 @@ export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
     model: options.model,
     messages,
   };
+
+  // Pass array-form system (with cache_control) as top-level field.
+  // LiteLLM forwards this to Anthropic's Messages API verbatim.
+  if (systemField && typeof systemField !== 'string') {
+    body.system = systemField;
+  }
 
   if (options.temperature !== undefined) body.temperature = options.temperature;
   if (options.maxTokens) body.max_tokens = options.maxTokens;
@@ -238,12 +303,23 @@ export async function callLLM(options: LLMRequest): Promise<LLMResponse> {
 
     const data = await response.json();
 
+    // Log cache activity in dev
+    if (import.meta.env.DEV && data.usage) {
+      const read = data.usage.cache_read_tokens ?? 0;
+      const write = data.usage.cache_creation_tokens ?? 0;
+      if (read > 0 || write > 0) {
+        console.info(`[proxyClient] Cache — read: ${read} tok, write: ${write} tok`);
+      }
+    }
+
     return {
       text: data.text ?? '',
       usage: data.usage
         ? {
             input_tokens: data.usage.input_tokens ?? data.usage.prompt_tokens ?? 0,
             output_tokens: data.usage.output_tokens ?? data.usage.completion_tokens ?? 0,
+            cache_read_tokens: data.usage.cache_read_tokens ?? 0,
+            cache_creation_tokens: data.usage.cache_creation_tokens ?? 0,
           }
         : undefined,
     };

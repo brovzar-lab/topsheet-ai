@@ -3,6 +3,13 @@
  *
  * Forwards chat completion requests to the shared LiteLLM server.
  * API keys never touch the browser — they live in functions/.env.
+ *
+ * Prompt Caching
+ * ─────────────
+ * When the client sends `body.system` as a content-block array
+ * (e.g. [{ type: 'text', text: '...', cache_control: { type: 'ephemeral' } }]),
+ * we pass it through to LiteLLM verbatim. LiteLLM forwards it to Anthropic
+ * natively, enabling ~90% cheaper cached input tokens for stable system prompts.
  */
 
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
@@ -30,6 +37,7 @@ export const llmProxy = onRequest(
     memory: '256MiB',
     maxInstances: 50,
     region: 'us-central1',
+    invoker: 'public', // Required for Firebase Hosting rewrites (allows unauthenticated calls)
   },
   (req, res) => {
     corsHandler(req, res, async () => {
@@ -42,6 +50,7 @@ export const llmProxy = onRequest(
         const {
           model,
           messages,
+          system,        // optional top-level system field (may include cache_control blocks)
           response_format,
           temperature,
           max_tokens,
@@ -62,6 +71,8 @@ export const llmProxy = onRequest(
         }
 
         const body: Record<string, unknown> = { model, messages };
+        // Forward system field verbatim — LiteLLM passes cache_control to Anthropic
+        if (system !== undefined) body.system = system;
         if (response_format) body.response_format = response_format;
         if (temperature !== undefined) body.temperature = temperature;
         if (max_tokens) body.max_tokens = max_tokens;
@@ -91,6 +102,9 @@ export const llmProxy = onRequest(
           ? {
               input_tokens: data.usage.prompt_tokens ?? 0,
               output_tokens: data.usage.completion_tokens ?? 0,
+              // Anthropic prompt cache fields (zero for Gemini — harmless)
+              cache_read_tokens: data.usage.cache_read_input_tokens ?? 0,
+              cache_creation_tokens: data.usage.cache_creation_input_tokens ?? 0,
             }
           : undefined;
 

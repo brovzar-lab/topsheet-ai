@@ -623,6 +623,7 @@ export function AssistantDirectorPanel({
             systemPrompt: targetSystemPrompt,
             temperature: 0.3,
             maxTokens: 4096,
+            cacheSystemPrompt: true,  // system prompt contains full screenplay — cache it
         });
         return result.text
             .replace(/\[ACTIONS\][\s\S]*?(\[\/ACTIONS\]|$)/g, '')
@@ -654,6 +655,7 @@ export function AssistantDirectorPanel({
                 systemPrompt,
                 temperature: 0.3,
                 maxTokens: 8192,
+                cacheSystemPrompt: true,  // system prompt contains full screenplay — cache it
             });
 
             const { prose, actions, crossConsult } = parseRafaResponse(result.text);

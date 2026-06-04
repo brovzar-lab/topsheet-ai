@@ -135,7 +135,7 @@ export function EpisodeUploadPage() {
             // Step 2 — parse scenes
             setStep('parsing');
             setProgress('Detecting scenes…');
-            const parseResult = parseScreenplay(pdfResult.text, pdfResult.pageCount);
+            const parseResult = parseScreenplay(pdfResult.text, pdfResult.pageCount, pdfResult.pages);
 
             if (parseResult.scenes.length === 0) {
                 setStep('error');
