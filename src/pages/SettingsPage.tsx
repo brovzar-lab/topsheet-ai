@@ -7,6 +7,27 @@ import { AgentBrainsPanel } from '@/components/settings/AgentBrainsPanel';
 import { MPILearnerPanel } from '@/components/settings/MPILearnerPanel';
 import { ResetDataPanel } from '@/components/settings/ResetDataPanel';
 
+// Pre-group models for optgroup rendering
+const CLAUDE_MODELS = MODEL_OPTIONS.filter((m) => m.provider === 'anthropic');
+const GEMINI_MODELS = MODEL_OPTIONS.filter((m) => m.provider === 'google');
+
+function ModelOptGroups() {
+    return (
+        <>
+            <optgroup label="── Anthropic Claude ──">
+                {CLAUDE_MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+            </optgroup>
+            <optgroup label="── Google Gemini ──">
+                {GEMINI_MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+            </optgroup>
+        </>
+    );
+}
+
 const ALL_TASK_ROLES: TaskRole[] = [
     'scriptAnalysis',
     'sceneBreakdown',
@@ -104,9 +125,7 @@ export function SettingsPage() {
                             onChange={(e) => { setDefaultModel(e.target.value); flash(); }}
                             className="px-3 py-2 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-sm text-lemon-text-primary focus:border-lemon-cyan focus:outline-none"
                         >
-                            {MODEL_OPTIONS.map((m) => (
-                                <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
+                            <ModelOptGroups />
                         </select>
                     </div>
 
@@ -132,19 +151,17 @@ export function SettingsPage() {
                                     <div key={role} className="flex items-center justify-between py-1.5">
                                         <span className="text-xs text-lemon-text-body">{TASK_ROLE_LABELS[role]}</span>
                                         <div className="flex items-center gap-2">
-                                            <select
+                                                <select
                                                 value={override ?? ''}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
                                                     setModelOverride(role, val === '' ? null : val);
                                                     flash();
                                                 }}
-                                                className="px-2 py-1 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary focus:border-lemon-cyan focus:outline-none min-w-[160px]"
+                                                className="px-2 py-1 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary focus:border-lemon-cyan focus:outline-none min-w-[180px]"
                                             >
                                                 <option value="">Use Default</option>
-                                                {MODEL_OPTIONS.map((m) => (
-                                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                                ))}
+                                                <ModelOptGroups />
                                             </select>
                                             {!override && (
                                                 <span className="text-[10px] text-lemon-text-muted">

@@ -16,10 +16,17 @@ export type TaskRole =
 
 /** Available models — `value` is exactly what callLLM() sends to LiteLLM */
 export const MODEL_OPTIONS = [
-    { value: 'gemini-2.5-flash',                     label: 'Gemini 2.5 Flash',  provider: 'google'    as const },
-    { value: 'gemini-large-context',                  label: 'Gemini 2.5 Pro',    provider: 'google'    as const },
-    { value: 'gemini-flash-fallback',                 label: 'Gemini 2.0 Flash',  provider: 'google'    as const },
-    { value: 'anthropic/claude-sonnet-4-20250514',    label: 'Claude Sonnet 4',   provider: 'anthropic' as const },
+    // ── Anthropic Claude ──────────────────────────────────────────────────
+    { value: 'anthropic/claude-opus-4-5',              label: 'Claude Opus 4.5',    provider: 'anthropic' as const },
+    { value: 'anthropic/claude-opus-4-20250514',       label: 'Claude Opus 4',      provider: 'anthropic' as const },
+    { value: 'anthropic/claude-sonnet-4-5',            label: 'Claude Sonnet 4.5',  provider: 'anthropic' as const },
+    { value: 'anthropic/claude-sonnet-4-20250514',     label: 'Claude Sonnet 4',    provider: 'anthropic' as const },
+    { value: 'anthropic/claude-haiku-3-5',             label: 'Claude Haiku 3.5',   provider: 'anthropic' as const },
+    { value: 'anthropic/claude-haiku-3-20240307',      label: 'Claude Haiku 3',     provider: 'anthropic' as const },
+    // ── Google Gemini ─────────────────────────────────────────────────────
+    { value: 'gemini-large-context',                   label: 'Gemini 2.5 Pro',     provider: 'google'    as const },
+    { value: 'gemini-2.5-flash',                       label: 'Gemini 2.5 Flash',   provider: 'google'    as const },
+    { value: 'gemini-flash-fallback',                  label: 'Gemini 2.0 Flash',   provider: 'google'    as const },
 ] as const;
 
 /** Human-readable labels for each task role */
