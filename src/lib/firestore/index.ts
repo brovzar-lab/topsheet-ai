@@ -2,6 +2,7 @@ import { useSceneStore } from '@/stores/scene-store';
 import { useBreakdownStore, setBreakdownProjectId } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
+import { useMemoryStore } from '@/stores/memory-store';
 
 /**
  * Load all project data from Firestore in parallel and hydrate all stores.
@@ -15,6 +16,7 @@ export async function loadProjectData(uid: string, projectId: string): Promise<v
         useBreakdownStore.getState().loadFromFirestore(uid, projectId),
         useScheduleStore.getState().loadFromFirestore(uid, projectId),
         useBudgetStore.getState().loadFromFirestore(uid, projectId),
+        useMemoryStore.getState().loadAll(uid, projectId),
     ]);
 
     for (const r of results) {
@@ -25,3 +27,4 @@ export async function loadProjectData(uid: string, projectId: string): Promise<v
 }
 
 export * from './series';
+

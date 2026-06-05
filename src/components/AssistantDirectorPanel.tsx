@@ -22,6 +22,7 @@ import {
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { useMemoryStore } from '@/stores/memory-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { getRafaTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
@@ -660,6 +661,11 @@ export function AssistantDirectorPanel({
 
             const { prose, actions, crossConsult } = parseRafaResponse(result.text);
             setMessagesStable(prev => [...prev, { role: 'assistant', content: prose, actions }]);
+
+            // 🧠 Brain eavesdrop — extract memories from Rafa's response (async, never blocks UI)
+            if (prose.length > 30) {
+                useMemoryStore.getState().retainFromChat('rafa', prose, projectId, undefined, snapshot?.territory ?? undefined);
+            }
 
             // ── Execute cross-consult if Rafa requested one ──
             if (crossConsult && sandraSystemPrompt) {

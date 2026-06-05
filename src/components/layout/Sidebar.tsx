@@ -12,11 +12,13 @@ import {
     Tv,
     Trash2,
     X,
+    Brain,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useProjectStore } from '@/stores/project-store';
 import { useSeriesStore } from '@/stores/series-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useMemoryStore } from '@/stores/memory-store';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,31 @@ function DeleteModal({
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ── Brain nav badge ──────────────────────────────────────────────────────────
+
+function BrainNavItem() {
+    const globalCount = useMemoryStore((s) => s.globalMemories.length);
+    const projectCount = useMemoryStore((s) => s.projectMemories.length);
+    const total = globalCount + projectCount;
+
+    return (
+        <div
+            className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-lemon-gray-400 hover:text-lemon-text-body hover:bg-lemon-bg-elevated/50 cursor-default"
+            title={`Brain: ${globalCount} global + ${projectCount} project memories`}
+        >
+            <Brain size={16} className="text-purple-400" />
+            <span className="font-mono text-xs tracking-widest uppercase flex items-center gap-2">
+                BRAIN
+                {total > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-purple-500/20 text-purple-300 text-[0.6rem] font-bold border border-purple-500/30">
+                        {total}
+                    </span>
+                )}
+            </span>
         </div>
     );
 }
@@ -175,6 +202,7 @@ function ProjectNav({ projectId, episodeSuffix }: { projectId: string; episodeSu
                 <Calendar size={16} />
                 <span className="font-mono text-xs tracking-widest uppercase">CALENDAR</span>
             </NavLink>
+            <BrainNavItem />
         </div>
     );
 }

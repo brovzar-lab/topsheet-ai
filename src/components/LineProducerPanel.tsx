@@ -22,6 +22,7 @@ import {
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { useMemoryStore } from '@/stores/memory-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { getSandraTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
@@ -633,6 +634,11 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
             // Parse: extract prose + actions + optional cross-consult request
             const { prose, actions, crossConsult } = parseSandraResponse(result.text);
             setMessagesStable(prev => [...prev, { role: 'assistant', content: prose, actions }]);
+
+            // 🧠 Brain eavesdrop — extract memories from Sandra's response (async, never blocks UI)
+            if (prose.length > 30 && snapshot?.projectId) {
+                useMemoryStore.getState().retainFromChat('sandra', prose, snapshot.projectId, undefined, snapshot?.territory ?? undefined);
+            }
 
             // ── Execute cross-consult if Sandra requested one ──
             if (crossConsult && rafaSystemPrompt) {

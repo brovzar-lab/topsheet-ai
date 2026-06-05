@@ -8,6 +8,7 @@ import {
 } from '@/lib/firestore/projects';
 import { saveProjectContent, loadProjectContent } from '@/lib/firestore/project-content';
 import { getCurrentUid } from '@/lib/auth-state';
+import { useMemoryStore } from '@/stores/memory-store';
 
 interface ProjectState {
     projects: Project[];
@@ -69,7 +70,11 @@ export const useProjectStore = create<ProjectState>()(
             activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
         }));
         const uid = getCurrentUid();
-        if (uid) deleteProjectFromFirestore(uid, id).catch(console.error);
+        if (uid) {
+            deleteProjectFromFirestore(uid, id).catch(console.error);
+            // 🧠 Brain: clean slate — delete all project-scoped memories
+            useMemoryStore.getState().deleteProjectMemories(uid, id).catch(console.error);
+        }
     },
 
     clearAll: () => set({ projects: [], activeProjectId: null }),

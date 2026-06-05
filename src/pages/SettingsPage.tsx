@@ -4,6 +4,7 @@ import { Settings, Key, DollarSign, Eye, EyeOff, CheckCircle, Cpu, ChevronDown }
 import { useSettingsStore, MODEL_OPTIONS, TASK_ROLE_LABELS } from '@/stores/settings-store';
 import type { TaskRole } from '@/stores/settings-store';
 import { AgentBrainsPanel } from '@/components/settings/AgentBrainsPanel';
+import { BrainMemoryPanel } from '@/components/settings/BrainMemoryPanel';
 import { MPILearnerPanel } from '@/components/settings/MPILearnerPanel';
 import { ResetDataPanel } from '@/components/settings/ResetDataPanel';
 
@@ -299,6 +300,9 @@ export function SettingsPage() {
 
                 {/* Agent Brains */}
                 <AgentBrainsPanel />
+
+                {/* Brain Memory (Learning System) */}
+                <BrainMemoryPanel />
 
                 {/* MPI Learner */}
                 <MPILearnerPanel />

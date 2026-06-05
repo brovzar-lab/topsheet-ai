@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { SceneBreakdown, BreakdownElement } from '@/types';
 import { saveBreakdown, loadBreakdown } from '@/lib/firestore/breakdowns';
 import { getCurrentUid } from '@/lib/auth-state';
+import { useMemoryStore } from '@/stores/memory-store';
 
 interface BreakdownState {
     breakdowns: Record<string, SceneBreakdown>;
@@ -48,9 +49,17 @@ export const useBreakdownStore = create<BreakdownState>((set, get) => ({
             };
         });
         _debouncedSync(get().breakdowns);
+
+        // 🧠 Brain: learn from manual additions
+        if (_activeProjectId && element.source === 'manual') {
+            useMemoryStore.getState().retainFromEdit(sceneNumber, 'add', element, _activeProjectId);
+        }
     },
 
     removeElement: (sceneNumber, elementId) => {
+        // Capture element before removal for Brain learning
+        const removedElement = get().breakdowns[sceneNumber]?.elements.find((e) => e.id === elementId);
+
         set((state) => {
             const existing = state.breakdowns[sceneNumber];
             if (!existing) return state;
@@ -65,6 +74,11 @@ export const useBreakdownStore = create<BreakdownState>((set, get) => ({
             };
         });
         _debouncedSync(get().breakdowns);
+
+        // 🧠 Brain: learn from removals (record contradiction)
+        if (_activeProjectId && removedElement) {
+            useMemoryStore.getState().retainFromEdit(sceneNumber, 'remove', removedElement, _activeProjectId);
+        }
     },
 
     markReviewed: (sceneNumber) => {

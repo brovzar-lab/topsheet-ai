@@ -38,6 +38,7 @@ import type { LineProducerContext, ProjectSnapshot } from '@/components/LineProd
 import { AssistantDirectorPanel } from '@/components/AssistantDirectorPanel';
 import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
+import { useMemoryStore } from '@/stores/memory-store';
 import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
 
 // -----------------------------------------------------------------------
@@ -104,12 +105,15 @@ export function BreakdownPage() {
 
         try {
             const scenesToProcess = sceneCap > 0 ? scenes.slice(0, sceneCap) : scenes;
+            // Merge agent skills + Brain memories into a single skillContext
             const rafaSkillContext = useAgentBrainStore.getState().getRafaSkillContext();
+            const brainContext = useMemoryStore.getState().recallForBreakdown(scenesToProcess);
+            const combinedContext = [rafaSkillContext, brainContext].filter(Boolean).join('\n') || undefined;
             const result = await processBreakdownBatch(
                 scenesToProcess,
                 (p) => setProgress(p),
                 controller.signal,
-                rafaSkillContext || undefined,
+                combinedContext,
             );
 
             for (const bd of result.succeeded) {

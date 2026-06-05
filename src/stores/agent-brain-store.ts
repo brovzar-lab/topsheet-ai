@@ -12,6 +12,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { RAFA_V1_SKILL_NAME, RAFA_V1_SKILL_CONTENT, RAFA_V1_SIZE_BYTES } from '@/data/rafa-default-skill';
 import { SANDRA_V1_SKILL_NAME, SANDRA_V1_SKILL_CONTENT, SANDRA_V1_SIZE_BYTES } from '@/data/sandra-default-skill';
+import { useMemoryStore } from '@/stores/memory-store';
 
 export interface SkillFile {
     id: string;
@@ -128,8 +129,16 @@ export const useAgentBrainStore = create<AgentBrainState>()(
                 return v1Replaced ? uploaded : [v1, ...uploaded];
             },
 
-            getRafaSkillContext: () => buildContext(get().getAllSkills('rafa')),
-            getSandraSkillContext: () => buildContext(get().getAllSkills('sandra')),
+            getRafaSkillContext: () => {
+                const skills = buildContext(get().getAllSkills('rafa'));
+                const memories = useMemoryStore.getState().recallForAgent('rafa');
+                return [skills, memories].filter(Boolean).join('\n');
+            },
+            getSandraSkillContext: () => {
+                const skills = buildContext(get().getAllSkills('sandra'));
+                const memories = useMemoryStore.getState().recallForAgent('sandra');
+                return [skills, memories].filter(Boolean).join('\n');
+            },
         }),
         {
             name: 'topsheet-agent-brains',
