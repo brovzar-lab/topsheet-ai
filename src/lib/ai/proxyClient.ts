@@ -37,9 +37,15 @@ function getStoredApiKey(provider: 'gemini' | 'anthropic'): string {
   }
 }
 
-const PROXY_URL = import.meta.env.DEV
+// In dev: use the deployed production Cloud Function directly.
+// This means local dev works with just `npm run dev` — no emulator needed.
+// Your Google auth token (from Firebase) is valid against the production function.
+// Set VITE_USE_EMULATOR=true in .env.local only when actively developing the function itself.
+const PROXY_URL = import.meta.env.VITE_USE_EMULATOR === 'true'
   ? 'http://127.0.0.1:5001/topsheet-ai/us-central1/llmProxy'
-  : '/api/llm';
+  : import.meta.env.DEV
+    ? 'https://us-central1-topsheet-ai.cloudfunctions.net/llmProxy'
+    : '/api/llm';
 
 export interface LLMRequest {
   model: string;
