@@ -21,6 +21,7 @@ import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { callLLM } from '@/lib/ai/proxyClient';
+import { cleanMarkdown } from '@/lib/cleanMarkdown';
 
 // -----------------------------------------------------------------------
 // Constants
@@ -503,7 +504,7 @@ export function BrainstormPanel({ onClose }: { onClose: () => void }) {
 
                                 {/* Content */}
                                 <div className="px-3 pb-3 pt-1 text-xs leading-relaxed text-lemon-text-body whitespace-pre-wrap">
-                                    {turn.content || (
+                                    {(turn.content ? cleanMarkdown(turn.content) : '') || (
                                         turn.streaming
                                             ? <span className="text-lemon-text-muted italic">Thinking…</span>
                                             : null

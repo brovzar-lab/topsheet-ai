@@ -213,6 +213,7 @@ export function BreakdownPage() {
         activeSceneNumber: selectedScene,
         budget: latestBudget ?? null,
         territory: currentProject?.territory ?? null,
+        schedule: schedule ?? null,
     };
 
     // Schedule snapshot for Rafa — always created; schedule is optional but scenes are always injected

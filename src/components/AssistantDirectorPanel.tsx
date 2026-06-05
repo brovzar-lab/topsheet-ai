@@ -20,6 +20,8 @@ import {
     ArrowRightLeft,
 } from 'lucide-react';
 import { useScheduleStore } from '@/stores/schedule-store';
+import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useBudgetStore } from '@/stores/budget-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useMemoryStore } from '@/stores/memory-store';
@@ -27,7 +29,8 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { getRafaTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
 import { callLLM } from '@/lib/ai/proxyClient';
-import type { ScheduleDraft } from '@/types';
+import { cleanMarkdown } from '@/lib/cleanMarkdown';
+import type { ScheduleDraft, ElementCategoryId } from '@/types';
 import type { SceneBreakdown } from '@/types';
 
 // -----------------------------------------------------------------------
@@ -43,7 +46,9 @@ interface Message {
 }
 
 interface RafaAction {
-    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE' | 'SET_TARGET_PAGES' | 'SET_SCHEDULE_SETTINGS';
+    type: 'MOVE_STRIP' | 'ADD_DAY' | 'REMOVE_DAY' | 'UPDATE_STRIP_NOTES' | 'SET_DAY_DATE' | 'SET_TARGET_PAGES' | 'SET_SCHEDULE_SETTINGS'
+        | 'ADD_ELEMENT' | 'ADD_ELEMENTS_BULK' | 'REMOVE_ELEMENT' | 'UPDATE_ELEMENT'
+        | 'UPDATE_BUDGET_LINE';
     label: string;
     payload: Record<string, unknown>;
 }
@@ -130,26 +135,29 @@ function parseRafaResponse(raw: string): ParsedRafaResponse {
 function executeAction(
     action: RafaAction,
     projectId: string,
-    schedule: ScheduleDraft,
+    schedule?: ScheduleDraft,
 ): (() => void) | null {
-    const store = useScheduleStore.getState();
+    const schedStore = useScheduleStore.getState();
+    const bdStore = useBreakdownStore.getState();
+    const budgetStore = useBudgetStore.getState();
 
     switch (action.type) {
+        // ── Schedule actions ──────────────────────────────────────────
         case 'MOVE_STRIP': {
+            if (!schedule) return null;
             const { fromDayId, toDayId, stripId, toIndex } = action.payload as {
                 fromDayId: string; toDayId: string; stripId: string; toIndex: number;
             };
-            // Find original index for undo
             const fromDay = schedule.shootDays.find(d => d.id === fromDayId);
             const origIndex = fromDay?.strips.findIndex(s => s.id === stripId) ?? 0;
-            store.moveStrip(projectId, fromDayId, toDayId, stripId, toIndex);
+            schedStore.moveStrip(projectId, fromDayId, toDayId, stripId, toIndex);
             return () => {
                 useScheduleStore.getState().moveStrip(projectId, toDayId, fromDayId, stripId, origIndex);
             };
         }
 
         case 'ADD_DAY': {
-            store.addDay(projectId);
+            schedStore.addDay(projectId);
             return () => {
                 const s = useScheduleStore.getState();
                 const sched = s.getSchedule(projectId);
@@ -161,41 +169,137 @@ function executeAction(
 
         case 'REMOVE_DAY': {
             const { dayId } = action.payload as { dayId: string };
+            if (!schedule) return null;
             const removedDay = schedule.shootDays.find(d => d.id === dayId);
             if (!removedDay) return null;
-            store.removeDay(projectId, dayId);
-            // Undo: we can re-add a day but can't restore strips perfectly — notify limitation
+            schedStore.removeDay(projectId, dayId);
             return null; // REMOVE_DAY undo is not safe — strips get reassigned
         }
 
         case 'UPDATE_STRIP_NOTES': {
+            if (!schedule) return null;
             const { stripId, notes } = action.payload as { stripId: string; notes: string };
             const prevNotes = schedule.shootDays
                 .flatMap(d => d.strips)
                 .find(s => s.id === stripId)?.notes ?? '';
-            store.updateStrip(projectId, stripId, { notes });
+            schedStore.updateStrip(projectId, stripId, { notes });
             return () => useScheduleStore.getState().updateStrip(projectId, stripId, { notes: prevNotes });
         }
 
         case 'SET_DAY_DATE': {
+            if (!schedule) return null;
             const { dayId, date } = action.payload as { dayId: string; date: string };
             const prevDate = schedule.shootDays.find(d => d.id === dayId)?.date ?? '';
-            store.setDayDate(projectId, dayId, date);
+            schedStore.setDayDate(projectId, dayId, date);
             return () => useScheduleStore.getState().setDayDate(projectId, dayId, prevDate);
         }
 
         case 'SET_TARGET_PAGES': {
+            if (!schedule) return null;
             const { targetPagesPerDay } = action.payload as { targetPagesPerDay: number };
             const prevTarget = schedule.targetPagesPerDay;
-            store.setTargetPagesPerDay(projectId, targetPagesPerDay);
+            schedStore.setTargetPagesPerDay(projectId, targetPagesPerDay);
             return () => useScheduleStore.getState().setTargetPagesPerDay(projectId, prevTarget);
         }
 
         case 'SET_SCHEDULE_SETTINGS': {
             const settings = action.payload as { shootDaysPerWeek?: number; hoursPerDay?: number };
+            if (!schedule) return null;
             const prevSettings = { shootDaysPerWeek: schedule.shootDaysPerWeek, hoursPerDay: schedule.hoursPerDay };
-            store.setScheduleSettings(projectId, settings);
+            schedStore.setScheduleSettings(projectId, settings);
             return () => useScheduleStore.getState().setScheduleSettings(projectId, prevSettings);
+        }
+
+        // ── Breakdown actions ─────────────────────────────────────────
+        case 'ADD_ELEMENT': {
+            const { sceneNumber, element } = action.payload as {
+                sceneNumber: string;
+                element: { categoryId: ElementCategoryId; name: string; quantity?: number; notes?: string };
+            };
+            const id = `rafa_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            bdStore.addElement(sceneNumber, {
+                id,
+                categoryId: element.categoryId,
+                name: element.name,
+                quantity: element.quantity ?? 1,
+                notes: element.notes,
+                source: 'manual',
+            });
+            return () => useBreakdownStore.getState().removeElement(sceneNumber, id);
+        }
+
+        case 'ADD_ELEMENTS_BULK': {
+            const { sceneNumber, elements } = action.payload as {
+                sceneNumber: string;
+                elements: Array<{ categoryId: ElementCategoryId; name: string; quantity?: number; notes?: string }>;
+            };
+            const ids: string[] = [];
+            for (const el of elements) {
+                const id = `rafa_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                ids.push(id);
+                bdStore.addElement(sceneNumber, {
+                    id,
+                    categoryId: el.categoryId,
+                    name: el.name,
+                    quantity: el.quantity ?? 1,
+                    notes: el.notes,
+                    source: 'manual',
+                });
+            }
+            return () => {
+                const s = useBreakdownStore.getState();
+                for (const id of ids) s.removeElement(sceneNumber, id);
+            };
+        }
+
+        case 'REMOVE_ELEMENT': {
+            const { sceneNumber, elementId } = action.payload as {
+                sceneNumber: string; elementId: string;
+            };
+            const removed = bdStore.breakdowns[sceneNumber]?.elements.find(e => e.id === elementId);
+            bdStore.removeElement(sceneNumber, elementId);
+            if (removed) {
+                return () => useBreakdownStore.getState().addElement(sceneNumber, removed);
+            }
+            return null;
+        }
+
+        case 'UPDATE_ELEMENT': {
+            const { sceneNumber, elementId, updates } = action.payload as {
+                sceneNumber: string;
+                elementId: string;
+                updates: { name?: string; quantity?: number; notes?: string; categoryId?: ElementCategoryId };
+            };
+            const bd = bdStore.breakdowns[sceneNumber];
+            const el = bd?.elements.find(e => e.id === elementId);
+            if (!el) return null;
+            const prev = { name: el.name, quantity: el.quantity, notes: el.notes, categoryId: el.categoryId };
+            // Remove and re-add with updates
+            bdStore.removeElement(sceneNumber, elementId);
+            bdStore.addElement(sceneNumber, { ...el, ...updates });
+            return () => {
+                const s = useBreakdownStore.getState();
+                s.removeElement(sceneNumber, elementId);
+                s.addElement(sceneNumber, { ...el, ...prev });
+            };
+        }
+
+        // ── Budget actions ────────────────────────────────────────────
+        case 'UPDATE_BUDGET_LINE': {
+            const { draftId, lineId, field, value } = action.payload as {
+                draftId: string; lineId: string;
+                field: 'rateCentavos' | 'quantity' | 'duration' | 'description';
+                value: number | string;
+            };
+            // Capture current value for undo
+            const draft = budgetStore.getDraft(draftId);
+            const line = draft?.lineItems.find(li => li.id === lineId);
+            if (!line) return null;
+            const prevValue = line[field];
+            budgetStore.updateLineItem(draftId, lineId, field, value);
+            return () => {
+                useBudgetStore.getState().updateLineItem(draftId, lineId, field, prevValue);
+            };
         }
 
         default:
@@ -232,7 +336,9 @@ function buildSystemPrompt(
         `A standard feature shoots 3-4 pages/day. You flag anything over 5 as a red alert.`,
         ``,
         `FORMAT RULES (non-negotiable):`,
-        `- Plain prose only. Zero markdown: no #, no **, no *, no ---.`,
+        `- Plain prose only. The user sees your EXACT raw text — asterisks appear as literal asterisks.`,
+        `- Zero markdown: no #, no **, no *, no ---, no backticks.`,
+        `- Write "Scene 7" not "**Scene 7**". Write "Important" not "### Important".`,
         `- Numbered or dashed lists only when actually listing things.`,
         `- Stop when you've answered. No padding, no pleasantries.`,
         `- If you don't know something, say so. Never fabricate numbers.`,
@@ -242,11 +348,12 @@ function buildSystemPrompt(
     lines.push(
         ``,
         `ACTION RULES:`,
-        `When your response contains concrete, actionable schedule fixes, append a single [ACTIONS]...[/ACTIONS] block at the very end — after all prose.`,
+        `You can DIRECTLY MODIFY the schedule, breakdown, and budget. When your response contains concrete fixes, append a single [ACTIONS]...[/ACTIONS] block at the very end — after all prose.`,
         `The block must contain valid JSON with an "actions" array.`,
-        `ONLY include actions when you are certain they are correct. When in doubt, skip the block.`,
+        `ONLY include actions when you are certain they are correct. When in doubt, explain and ask first.`,
+        `When the user says "fix it", "do it", "go ahead", or asks you to change something — ALWAYS include the [ACTIONS] block to actually make the change.`,
         ``,
-        `Valid action types and their exact payload schemas:`,
+        `=== SCHEDULE ACTIONS ===`,
         ``,
         `MOVE_STRIP — move a scene strip from one day to another:`,
         `  { "type": "MOVE_STRIP", "label": "Move Scene 12 to Day 3", "payload": { "fromDayId": "<day id>", "toDayId": "<day id>", "stripId": "<strip id>", "toIndex": 0 } }`,
@@ -269,6 +376,29 @@ function buildSystemPrompt(
         `SET_SCHEDULE_SETTINGS — change schedule working parameters:`,
         `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 6-day work week", "payload": { "shootDaysPerWeek": 6 } }`,
         `  { "type": "SET_SCHEDULE_SETTINGS", "label": "Set 10-hour days", "payload": { "hoursPerDay": 10 } }`,
+        ``,
+        `=== BREAKDOWN ACTIONS ===`,
+        ``,
+        `ADD_ELEMENT — add one element to a scene breakdown:`,
+        `  { "type": "ADD_ELEMENT", "label": "Add Stunt Coordinator to Scene 5", "payload": { "sceneNumber": "5", "element": { "categoryId": "stunts", "name": "Stunt Coordinator", "quantity": 1 } } }`,
+        ``,
+        `ADD_ELEMENTS_BULK — add multiple elements to one scene at once:`,
+        `  { "type": "ADD_ELEMENTS_BULK", "label": "Add 3 missing props to Scene 7", "payload": { "sceneNumber": "7", "elements": [ { "categoryId": "props", "name": "Pistol", "quantity": 1 }, { "categoryId": "vehicles", "name": "Truck", "quantity": 1 } ] } }`,
+        ``,
+        `REMOVE_ELEMENT — remove an existing element by its exact ID:`,
+        `  { "type": "REMOVE_ELEMENT", "label": "Remove duplicate Pistol from Scene 5", "payload": { "sceneNumber": "5", "elementId": "<exact id from breakdown data>" } }`,
+        ``,
+        `UPDATE_ELEMENT — change name, quantity, notes, or category of an existing element:`,
+        `  { "type": "UPDATE_ELEMENT", "label": "Reclassify Carnicero from extras to cast", "payload": { "sceneNumber": "3", "elementId": "<id>", "updates": { "categoryId": "cast" } } }`,
+        `  { "type": "UPDATE_ELEMENT", "label": "Change quantity of Police Officers to 6", "payload": { "sceneNumber": "12", "elementId": "<id>", "updates": { "quantity": 6 } } }`,
+        ``,
+        `Valid categoryId values: cast, extras, stunts, sfx, vfx, props, set_dressing, vehicles, wardrobe, makeup_hair, animals, sound_music, special_equipment, locations, greenery, art_dept, security`,
+        ``,
+        `=== BUDGET ACTIONS ===`,
+        ``,
+        `UPDATE_BUDGET_LINE — change rate, quantity, duration, or description on a budget line item:`,
+        `  { "type": "UPDATE_BUDGET_LINE", "label": "Set Stunt Coordinator rate to $15,000/week", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "rateCentavos", "value": 1500000 } }`,
+        `  { "type": "UPDATE_BUDGET_LINE", "label": "Change grip quantity to 4", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "quantity", "value": 4 } }`,
     );
 
     // ── Schedule adjustment intelligence ──
@@ -446,7 +576,7 @@ function ActionGroup({
 }: {
     actions: RafaAction[];
     projectId: string;
-    schedule: ScheduleDraft;
+    schedule?: ScheduleDraft;
 }) {
     const [appliedMap, setAppliedMap] = useState<Record<number, boolean>>({});
     const undoRefs = useRef<Record<number, (() => void) | null>>({});
@@ -990,7 +1120,7 @@ export function AssistantDirectorPanel({
                                                     <span className="w-1.5 h-1.5 rounded-full bg-lemon-cyan/60 animate-bounce [animation-delay:150ms]" />
                                                     <span className="w-1.5 h-1.5 rounded-full bg-lemon-cyan/60 animate-bounce [animation-delay:300ms]" />
                                                 </span>
-                                            ) : msg.content}
+                                            ) : cleanMarkdown(msg.content)}
                                         </div>
                                     </div>
                                 ) : (
@@ -1002,7 +1132,7 @@ export function AssistantDirectorPanel({
                                                 : 'bg-lemon-bg-elevated text-lemon-text-body'
                                         }`}
                                     >
-                                        {msg.content || (
+                                        {(msg.content ? cleanMarkdown(msg.content) : '') || (
                                             // Streaming dots
                                             <span className="flex gap-1 items-center h-3">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-lemon-yellow/60 animate-bounce [animation-delay:0ms]" />
@@ -1013,7 +1143,7 @@ export function AssistantDirectorPanel({
                                     </div>
                                 )}
                                 {/* Action buttons (only on normal Rafa messages) */}
-                                {!msg.crossAgent && msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && snapshot?.schedule && (
+                                {!msg.crossAgent && msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && (
                                     <ActionGroup
                                         actions={msg.actions}
                                         projectId={projectId}

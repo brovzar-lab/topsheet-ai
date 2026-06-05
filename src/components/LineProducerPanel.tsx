@@ -20,6 +20,8 @@ import {
     ArrowRightLeft,
 } from 'lucide-react';
 import { useBreakdownStore } from '@/stores/breakdown-store';
+import { useScheduleStore } from '@/stores/schedule-store';
+import { useBudgetStore } from '@/stores/budget-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useMemoryStore } from '@/stores/memory-store';
@@ -27,7 +29,8 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { getSandraTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
 import { callLLM } from '@/lib/ai/proxyClient';
-import type { Scene, SceneBreakdown, BudgetDraft, ElementCategoryId } from '@/types';
+import { cleanMarkdown } from '@/lib/cleanMarkdown';
+import type { Scene, SceneBreakdown, BudgetDraft, ScheduleDraft, ElementCategoryId } from '@/types';
 
 // -----------------------------------------------------------------------
 // Types
@@ -42,7 +45,10 @@ interface Message {
 }
 
 export interface SandraAction {
-    type: 'ADD_ELEMENT' | 'ADD_ELEMENTS_BULK' | 'REMOVE_ELEMENT' | 'MARK_REVIEWED' | 'MARK_ALL_REVIEWED';
+    type: 'ADD_ELEMENT' | 'ADD_ELEMENTS_BULK' | 'REMOVE_ELEMENT' | 'MARK_REVIEWED' | 'MARK_ALL_REVIEWED'
+        | 'UPDATE_ELEMENT'
+        | 'MOVE_STRIP' | 'ADD_DAY' | 'UPDATE_STRIP_NOTES'
+        | 'UPDATE_BUDGET_LINE';
     label: string;
     payload: Record<string, unknown>;
 }
@@ -64,6 +70,7 @@ export interface ProjectSnapshot {
     activeSceneNumber: string | null;
     budget?: BudgetDraft | null;
     territory?: ProductionTerritory | null;
+    schedule?: ScheduleDraft | null;
 }
 
 // -----------------------------------------------------------------------
@@ -135,17 +142,20 @@ function parseSandraResponse(raw: string): ParsedSandraResponse {
 // -----------------------------------------------------------------------
 
 // Returns an undo closure that reverses the action, or null if not reversible.
-function executeAction(action: SandraAction): (() => void) | null {
-    const store = useBreakdownStore.getState();
+function executeAction(action: SandraAction, projectId?: string): (() => void) | null {
+    const bdStore = useBreakdownStore.getState();
+    const schedStore = useScheduleStore.getState();
+    const budgetStore = useBudgetStore.getState();
 
     switch (action.type) {
+        // ── Breakdown actions ──────────────────────────────────────────
         case 'ADD_ELEMENT': {
             const { sceneNumber, element } = action.payload as {
                 sceneNumber: string;
                 element: { categoryId: ElementCategoryId; name: string; quantity?: number; notes?: string };
             };
             const id = `sandra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-            store.addElement(sceneNumber, {
+            bdStore.addElement(sceneNumber, {
                 id,
                 categoryId: element.categoryId,
                 name: element.name,
@@ -165,7 +175,7 @@ function executeAction(action: SandraAction): (() => void) | null {
             for (const el of elements) {
                 const id = `sandra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
                 ids.push(id);
-                store.addElement(sceneNumber, {
+                bdStore.addElement(sceneNumber, {
                     id,
                     categoryId: el.categoryId,
                     name: el.name,
@@ -184,33 +194,107 @@ function executeAction(action: SandraAction): (() => void) | null {
             const { sceneNumber, elementId } = action.payload as {
                 sceneNumber: string; elementId: string;
             };
-            // Capture element before deleting so we can restore it
-            const removed = store.breakdowns[sceneNumber]?.elements.find(e => e.id === elementId);
-            store.removeElement(sceneNumber, elementId);
+            const removed = bdStore.breakdowns[sceneNumber]?.elements.find(e => e.id === elementId);
+            bdStore.removeElement(sceneNumber, elementId);
             if (removed) {
                 return () => useBreakdownStore.getState().addElement(sceneNumber, removed);
             }
             return null;
         }
 
+        case 'UPDATE_ELEMENT': {
+            const { sceneNumber, elementId, updates } = action.payload as {
+                sceneNumber: string;
+                elementId: string;
+                updates: { name?: string; quantity?: number; notes?: string; categoryId?: ElementCategoryId };
+            };
+            const bd = bdStore.breakdowns[sceneNumber];
+            const el = bd?.elements.find(e => e.id === elementId);
+            if (!el) return null;
+            const prev = { name: el.name, quantity: el.quantity, notes: el.notes, categoryId: el.categoryId };
+            bdStore.removeElement(sceneNumber, elementId);
+            bdStore.addElement(sceneNumber, { ...el, ...updates });
+            return () => {
+                const s = useBreakdownStore.getState();
+                s.removeElement(sceneNumber, elementId);
+                s.addElement(sceneNumber, { ...el, ...prev });
+            };
+        }
+
         case 'MARK_REVIEWED': {
             const { sceneNumber } = action.payload as { sceneNumber: string };
-            const wasReviewed = store.breakdowns[sceneNumber]?.reviewed ?? false;
-            store.markReviewed(sceneNumber);
+            const wasReviewed = bdStore.breakdowns[sceneNumber]?.reviewed ?? false;
+            bdStore.markReviewed(sceneNumber);
             return wasReviewed ? null : () => useBreakdownStore.getState().unmarkReviewed(sceneNumber);
         }
 
         case 'MARK_ALL_REVIEWED': {
             const { sceneNumbers } = action.payload as { sceneNumbers: string[] };
-            // Only track the ones that weren't already reviewed
-            const prevUnreviewed = sceneNumbers.filter(sn => !store.breakdowns[sn]?.reviewed);
-            store.markAllReviewed(sceneNumbers);
+            const prevUnreviewed = sceneNumbers.filter(sn => !bdStore.breakdowns[sn]?.reviewed);
+            bdStore.markAllReviewed(sceneNumbers);
             return prevUnreviewed.length > 0
                 ? () => {
                     const s = useBreakdownStore.getState();
                     for (const sn of prevUnreviewed) s.unmarkReviewed(sn);
                 }
                 : null;
+        }
+
+        // ── Schedule actions ──────────────────────────────────────────
+        case 'MOVE_STRIP': {
+            if (!projectId) return null;
+            const { fromDayId, toDayId, stripId, toIndex } = action.payload as {
+                fromDayId: string; toDayId: string; stripId: string; toIndex: number;
+            };
+            const schedule = schedStore.getSchedule(projectId);
+            if (!schedule) return null;
+            const fromDay = schedule.shootDays.find(d => d.id === fromDayId);
+            const origIndex = fromDay?.strips.findIndex(s => s.id === stripId) ?? 0;
+            schedStore.moveStrip(projectId, fromDayId, toDayId, stripId, toIndex);
+            return () => {
+                useScheduleStore.getState().moveStrip(projectId, toDayId, fromDayId, stripId, origIndex);
+            };
+        }
+
+        case 'ADD_DAY': {
+            if (!projectId) return null;
+            schedStore.addDay(projectId);
+            return () => {
+                const s = useScheduleStore.getState();
+                const sched = s.getSchedule(projectId);
+                if (!sched || sched.shootDays.length === 0) return;
+                const lastDay = sched.shootDays[sched.shootDays.length - 1];
+                if (lastDay) s.removeDay(projectId, lastDay.id);
+            };
+        }
+
+        case 'UPDATE_STRIP_NOTES': {
+            if (!projectId) return null;
+            const { stripId, notes } = action.payload as { stripId: string; notes: string };
+            const schedule = schedStore.getSchedule(projectId);
+            if (!schedule) return null;
+            const prevNotes = schedule.shootDays
+                .flatMap(d => d.strips)
+                .find(s => s.id === stripId)?.notes ?? '';
+            schedStore.updateStrip(projectId, stripId, { notes });
+            return () => useScheduleStore.getState().updateStrip(projectId, stripId, { notes: prevNotes });
+        }
+
+        // ── Budget actions ──────────────────────────────────────────
+        case 'UPDATE_BUDGET_LINE': {
+            const { draftId, lineId, field, value } = action.payload as {
+                draftId: string; lineId: string;
+                field: 'rateCentavos' | 'quantity' | 'duration' | 'description';
+                value: number | string;
+            };
+            const draft = budgetStore.getDraft(draftId);
+            const line = draft?.lineItems.find(li => li.id === lineId);
+            if (!line) return null;
+            const prevValue = line[field];
+            budgetStore.updateLineItem(draftId, lineId, field, value);
+            return () => {
+                useBudgetStore.getState().updateLineItem(draftId, lineId, field, prevValue);
+            };
         }
 
         default:
@@ -240,7 +324,9 @@ function buildSystemPrompt(
         `You know MXN budgets, ATL/BTL structures, IMCINE line items, and Mexican union rates cold.`,
         ``,
         `FORMAT RULES (non-negotiable):`,
-        `- Plain prose only. Zero markdown: no #, no **, no *, no ---.`,
+        `- Plain prose only. The user sees your EXACT raw text — asterisks appear as literal asterisks.`,
+        `- Zero markdown: no #, no **, no *, no ---, no backticks.`,
+        `- Write "Scene 7" not "**Scene 7**". Write "Total" not "### Total".`,
         `- Numbered or dashed lists only when actually listing things.`,
         `- Stop when you've answered. No padding.`,
         `- If you don't know something, say so. Never fabricate numbers.`,
@@ -250,12 +336,12 @@ function buildSystemPrompt(
     lines.push(
         ``,
         `ACTION RULES:`,
-        `When your response contains concrete, actionable fixes (adding or removing elements, marking scenes reviewed),`,
-        `append a single [ACTIONS]...[/ACTIONS] block at the very end of your response — after all prose.`,
+        `You can DIRECTLY MODIFY the breakdown, schedule, and budget. When your response contains concrete fixes, append a single [ACTIONS]...[/ACTIONS] block at the very end — after all prose.`,
         `The block must contain valid JSON with an "actions" array.`,
-        `ONLY include actions when you are certain they are correct. When in doubt, skip the block.`,
+        `ONLY include actions when you are certain they are correct. When in doubt, explain and ask first.`,
+        `When the user says "fix it", "do it", "go ahead", or asks you to change something — ALWAYS include the [ACTIONS] block to actually make the change.`,
         ``,
-        `Valid action types and their exact payload schemas:`,
+        `=== BREAKDOWN ACTIONS ===`,
         ``,
         `ADD_ELEMENT — add one element to a scene:`,
         `  { "type": "ADD_ELEMENT", "label": "Add Police Car to Scene 3", "payload": { "sceneNumber": "3", "element": { "categoryId": "vehicles", "name": "Police Car", "quantity": 2 } } }`,
@@ -266,6 +352,10 @@ function buildSystemPrompt(
         `REMOVE_ELEMENT — remove an existing element by its exact ID from the breakdown data:`,
         `  { "type": "REMOVE_ELEMENT", "label": "Remove duplicate Pistol from Scene 5", "payload": { "sceneNumber": "5", "elementId": "<exact id from breakdown data>" } }`,
         ``,
+        `UPDATE_ELEMENT — change name, quantity, notes, or category of an existing element:`,
+        `  { "type": "UPDATE_ELEMENT", "label": "Reclassify Carnicero from extras to cast", "payload": { "sceneNumber": "3", "elementId": "<id>", "updates": { "categoryId": "cast" } } }`,
+        `  { "type": "UPDATE_ELEMENT", "label": "Change quantity of Police Officers to 6", "payload": { "sceneNumber": "12", "elementId": "<id>", "updates": { "quantity": 6 } } }`,
+        ``,
         `MARK_REVIEWED — mark a single scene as reviewed:`,
         `  { "type": "MARK_REVIEWED", "label": "Mark Scene 4 reviewed", "payload": { "sceneNumber": "4" } }`,
         ``,
@@ -274,6 +364,23 @@ function buildSystemPrompt(
         ``,
         `Valid categoryId values (use these exactly, no other strings):`,
         VALID_CATEGORY_IDS.map(id => `  ${id}`).join('\n'),
+        ``,
+        `=== SCHEDULE ACTIONS ===`,
+        ``,
+        `MOVE_STRIP — move a scene strip from one day to another:`,
+        `  { "type": "MOVE_STRIP", "label": "Move Scene 12 to Day 3", "payload": { "fromDayId": "<day id>", "toDayId": "<day id>", "stripId": "<strip id>", "toIndex": 0 } }`,
+        ``,
+        `ADD_DAY — add a new empty shoot day at the end:`,
+        `  { "type": "ADD_DAY", "label": "Add Day 8", "payload": {} }`,
+        ``,
+        `UPDATE_STRIP_NOTES — add or update notes on a strip:`,
+        `  { "type": "UPDATE_STRIP_NOTES", "label": "Flag cost concern on Scene 8", "payload": { "stripId": "<strip id>", "notes": "Heavy VFX — budget $50k" } }`,
+        ``,
+        `=== BUDGET ACTIONS ===`,
+        ``,
+        `UPDATE_BUDGET_LINE — change rate, quantity, duration, or description on a budget line item:`,
+        `  { "type": "UPDATE_BUDGET_LINE", "label": "Set Director rate to $200,000", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "rateCentavos", "value": 20000000 } }`,
+        `  { "type": "UPDATE_BUDGET_LINE", "label": "Change grip quantity to 4", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "quantity", "value": 4 } }`,
         ``,
         `Example of a full response with actions:`,
         `Scene 7 is missing a vehicle and a prop. Here's what I'd add:`,
@@ -446,7 +553,7 @@ function ActionButton({
 }
 
 // Group: renders Apply All (when >1 action) + individual action buttons
-function ActionGroup({ actions }: { actions: SandraAction[] }) {
+function ActionGroup({ actions, projectId }: { actions: SandraAction[]; projectId?: string }) {
     // Track applied state + undo closures for each action by index
     const [appliedMap, setAppliedMap] = useState<Record<number, boolean>>({});
     const undoRefs = useRef<Record<number, (() => void) | null>>({});
@@ -455,7 +562,7 @@ function ActionGroup({ actions }: { actions: SandraAction[] }) {
         if (appliedMap[idx]) return;
         const action = actions[idx];
         if (!action) return;
-        const undo = executeAction(action);
+        const undo = executeAction(action, projectId);
         undoRefs.current[idx] = undo ?? null;
         setAppliedMap(prev => ({ ...prev, [idx]: true }));
     };
@@ -910,7 +1017,7 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                                                     <span className="w-1 h-1 bg-lemon-yellow/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                                     <span className="w-1 h-1 bg-lemon-yellow/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                                                 </span>
-                                            ) : msg.content}
+                                            ) : cleanMarkdown(msg.content)}
                                         </div>
                                     </div>
                                 ) : (
@@ -920,12 +1027,12 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
                                             ? 'bg-lemon-cyan/12 text-lemon-text-primary border border-lemon-cyan/20'
                                             : 'bg-lemon-bg-elevated border border-lemon-gray-700 text-lemon-text-body'
                                     }`}>
-                                        {msg.content}
+                                        {cleanMarkdown(msg.content)}
                                     </div>
                                 )}
                                 {/* Action buttons (only on normal Sandra messages) */}
                                 {!msg.crossAgent && msg.actions && msg.actions.length > 0 && (
-                                    <ActionGroup actions={msg.actions} />
+                                    <ActionGroup actions={msg.actions} projectId={snapshot?.projectId} />
                                 )}
                             </div>
                         </div>
