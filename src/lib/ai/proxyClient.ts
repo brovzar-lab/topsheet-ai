@@ -22,6 +22,21 @@ import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/ge
 import { getIdToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
+// Lazy import to avoid circular dep — settings-store imports nothing from ai/
+function getStoredApiKey(provider: 'gemini' | 'anthropic'): string {
+  try {
+    // Zustand persist stores state under the store name key in localStorage
+    const raw = localStorage.getItem('topsheet-settings');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as { state?: { geminiApiKey?: string; anthropicApiKey?: string } };
+    return provider === 'gemini'
+      ? (parsed.state?.geminiApiKey ?? '')
+      : (parsed.state?.anthropicApiKey ?? '');
+  } catch {
+    return '';
+  }
+}
+
 const PROXY_URL = import.meta.env.DEV
   ? 'http://127.0.0.1:5001/topsheet-ai/us-central1/llmProxy'
   : '/api/llm';
@@ -131,11 +146,12 @@ async function callGeminiDirect(options: LLMRequest): Promise<LLMResponse> {
       'Ensure the Firebase emulator or deployed Cloud Function is reachable.',
     );
   }
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  // Check env var first, then fall back to key stored in Settings UI
+  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) || getStoredApiKey('gemini');
   if (!apiKey) {
     throw new Error(
-      'LLM proxy is unavailable and no VITE_GEMINI_API_KEY is set. ' +
-      'Either start the Firebase emulator or add VITE_GEMINI_API_KEY to .env.local',
+      'LLM proxy is unavailable and no Gemini API key is configured. ' +
+      'Add your Gemini key in Settings → API Keys, or set VITE_GEMINI_API_KEY in .env.local',
     );
   }
 
@@ -175,11 +191,12 @@ async function callClaudeDirect(options: LLMRequest): Promise<LLMResponse> {
       'Ensure the Firebase emulator or deployed Cloud Function is reachable.',
     );
   }
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
+  // Check env var first, then fall back to key stored in Settings UI
+  const apiKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined) || getStoredApiKey('anthropic');
   if (!apiKey) {
     throw new Error(
-      'LLM proxy is unavailable and no VITE_ANTHROPIC_API_KEY is set. ' +
-      'Either start the Firebase emulator or add VITE_ANTHROPIC_API_KEY to .env.local',
+      'LLM proxy is unavailable and no Anthropic API key is configured. ' +
+      'Add your Anthropic key in Settings → API Keys, or set VITE_ANTHROPIC_API_KEY in .env.local',
     );
   }
 
