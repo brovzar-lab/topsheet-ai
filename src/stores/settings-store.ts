@@ -21,7 +21,7 @@ export const MODEL_OPTIONS = [
     { value: 'claude-opus-4-6',                        label: 'Claude Opus 4',      provider: 'anthropic' as const },
     { value: 'claude-sonnet-4-6',                      label: 'Claude Sonnet 4.5',  provider: 'anthropic' as const },
     { value: 'anthropic/claude-sonnet-4-20250514',     label: 'Claude Sonnet 4',    provider: 'anthropic' as const },
-    { value: 'claude-haiku-4-5',                       label: 'Claude Haiku 3.5',   provider: 'anthropic' as const },
+    { value: 'claude-haiku-4-5',                       label: 'Claude Haiku 4',     provider: 'anthropic' as const },
     // ── Google Gemini (via LiteLLM proxy) ────────────────────────────────
     { value: 'gemini-large-context',                   label: 'Gemini 2.5 Pro',     provider: 'google'    as const },
     { value: 'gemini-2.5-flash',                       label: 'Gemini 2.5 Flash',   provider: 'google'    as const },
