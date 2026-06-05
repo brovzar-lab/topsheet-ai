@@ -32,6 +32,7 @@ import { callLLM } from '@/lib/ai/proxyClient';
 import { cleanMarkdown } from '@/lib/cleanMarkdown';
 import type { ScheduleDraft, ElementCategoryId } from '@/types';
 import type { SceneBreakdown } from '@/types';
+import { buildDoodMatrix } from '@/lib/schedule/dood-matrix';
 
 // -----------------------------------------------------------------------
 // Types
@@ -399,6 +400,11 @@ function buildSystemPrompt(
         `UPDATE_BUDGET_LINE — change rate, quantity, duration, or description on a budget line item:`,
         `  { "type": "UPDATE_BUDGET_LINE", "label": "Set Stunt Coordinator rate to $15,000/week", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "rateCentavos", "value": 1500000 } }`,
         `  { "type": "UPDATE_BUDGET_LINE", "label": "Change grip quantity to 4", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "quantity", "value": 4 } }`,
+        ``,
+        `=== DOOD (DAY OUT OF DAYS) ===`,
+        `The DOOD is a computed matrix showing which cast members work which days. You cannot edit it directly.`,
+        `Instead, changes to the schedule (MOVE_STRIP, ADD_DAY) or breakdown cast elements (ADD_ELEMENT with categoryId "cast", REMOVE_ELEMENT, UPDATE_ELEMENT) automatically update the DOOD.`,
+        `When the user asks about DOOD issues (hold days, cast gaps), diagnose and fix via schedule or breakdown actions.`,
     );
 
     // ── Schedule adjustment intelligence ──
@@ -488,6 +494,20 @@ function buildSystemPrompt(
                     `id: ${strip.id}` +
                     (strip.notes ? ` // NOTES: ${strip.notes}` : ''),
                 );
+            }
+        }
+
+        // ── DOOD matrix (when schedule exists) ──
+        const doodMatrix = buildDoodMatrix(s);
+        if (doodMatrix.characters.length > 0) {
+            lines.push(`\nDOOD (Day Out of Days) — ${doodMatrix.characters.length} cast members across ${doodMatrix.totalDays} days:`);
+            lines.push(`Symbols: SW=Start/Work, W=Work, WF=Work/Finish, SWF=Single Day, H=Hold`);
+            for (const char of doodMatrix.characters) {
+                const statuses = doodMatrix.matrix.get(char) ?? [];
+                const workDays = statuses.filter(st => st === 'W' || st === 'SW' || st === 'WF' || st === 'SWF').length;
+                const holdDays = statuses.filter(st => st === 'H').length;
+                const statusStr = statuses.map((st, i) => st ? `D${i+1}:${st}` : '').filter(Boolean).join(' ');
+                lines.push(`  ${char}: ${workDays}W ${holdDays > 0 ? holdDays + 'H ' : ''}| ${statusStr}`);
             }
         }
     }

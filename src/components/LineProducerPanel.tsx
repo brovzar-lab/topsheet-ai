@@ -30,6 +30,7 @@ import { getSandraTerritoryContext } from '@/lib/territory-knowledge';
 import type { ProductionTerritory } from '@/lib/territory-knowledge';
 import { callLLM } from '@/lib/ai/proxyClient';
 import { cleanMarkdown } from '@/lib/cleanMarkdown';
+import { buildDoodMatrix } from '@/lib/schedule/dood-matrix';
 import type { Scene, SceneBreakdown, BudgetDraft, ScheduleDraft, ElementCategoryId } from '@/types';
 
 // -----------------------------------------------------------------------
@@ -382,6 +383,11 @@ function buildSystemPrompt(
         `  { "type": "UPDATE_BUDGET_LINE", "label": "Set Director rate to $200,000", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "rateCentavos", "value": 20000000 } }`,
         `  { "type": "UPDATE_BUDGET_LINE", "label": "Change grip quantity to 4", "payload": { "draftId": "<budget draft id>", "lineId": "<line item id>", "field": "quantity", "value": 4 } }`,
         ``,
+        `=== DOOD (DAY OUT OF DAYS) ===`,
+        `The DOOD is a computed matrix showing which cast members work which days. You cannot edit it directly.`,
+        `Instead, changes to the schedule (MOVE_STRIP, ADD_DAY) or breakdown cast elements (ADD_ELEMENT with categoryId "cast", REMOVE_ELEMENT, UPDATE_ELEMENT) automatically update the DOOD.`,
+        `When the user asks about DOOD issues (hold days, cast gaps), diagnose and fix via schedule or breakdown actions.`,
+        ``,
         `Example of a full response with actions:`,
         `Scene 7 is missing a vehicle and a prop. Here's what I'd add:`,
         `[ACTIONS]{"actions":[{"type":"ADD_ELEMENTS_BULK","label":"Add missing vehicle + prop to Scene 7","payload":{"sceneNumber":"7","elements":[{"categoryId":"vehicles","name":"Army Jeep","quantity":1},{"categoryId":"props","name":"Radio","quantity":1}]}}]}[/ACTIONS]`,
@@ -464,6 +470,22 @@ function buildSystemPrompt(
     }
 
     // (Scene body text is now handled inside the PROJECT DATA block above, per mode)
+
+    // ── DOOD matrix (when schedule exists) ──
+    if (snapshot?.schedule) {
+        const doodMatrix = buildDoodMatrix(snapshot.schedule);
+        if (doodMatrix.characters.length > 0) {
+            lines.push(`\nDOOD (Day Out of Days) — ${doodMatrix.characters.length} cast members across ${doodMatrix.totalDays} days:`);
+            lines.push(`Symbols: SW=Start/Work, W=Work, WF=Work/Finish, SWF=Single Day, H=Hold`);
+            for (const char of doodMatrix.characters) {
+                const statuses = doodMatrix.matrix.get(char) ?? [];
+                const workDays = statuses.filter(st => st === 'W' || st === 'SW' || st === 'WF' || st === 'SWF').length;
+                const holdDays = statuses.filter(st => st === 'H').length;
+                const statusStr = statuses.map((st, i) => st ? `D${i+1}:${st}` : '').filter(Boolean).join(' ');
+                lines.push(`  ${char}: ${workDays}W ${holdDays > 0 ? holdDays + 'H ' : ''}| ${statusStr}`);
+            }
+        }
+    }
 
     // ── Error context ──
     if (ctx) {
