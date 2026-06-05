@@ -18,14 +18,15 @@ export type TaskRole =
 export const MODEL_OPTIONS = [
     // ── Anthropic Claude (via LiteLLM proxy) ─────────────────────────────
     // Verified against: http://srv1557188.hstgr.cloud:4000/v1/models
-    { value: 'claude-opus-4-6',                        label: 'Claude Opus 4',      provider: 'anthropic' as const },
-    { value: 'claude-sonnet-4-6',                      label: 'Claude Sonnet 4.5',  provider: 'anthropic' as const },
-    { value: 'anthropic/claude-sonnet-4-20250514',     label: 'Claude Sonnet 4',    provider: 'anthropic' as const },
-    { value: 'claude-haiku-4-5',                       label: 'Claude Haiku 4',     provider: 'anthropic' as const },
+    // Pricing: Opus $5/$25 · Sonnet $3/$15 · Haiku $1/$5  (per 1M tokens in/out)
+    { value: 'claude-opus-4-6',                        label: 'Claude Opus 4',    provider: 'anthropic' as const },
+    { value: 'anthropic/claude-sonnet-4-20250514',     label: 'Claude Sonnet 4',  provider: 'anthropic' as const },
+    { value: 'claude-haiku-4-5',                       label: 'Claude Haiku 4',   provider: 'anthropic' as const },
     // ── Google Gemini (via LiteLLM proxy) ────────────────────────────────
-    { value: 'gemini-large-context',                   label: 'Gemini 2.5 Pro',     provider: 'google'    as const },
-    { value: 'gemini-2.5-flash',                       label: 'Gemini 2.5 Flash',   provider: 'google'    as const },
-    { value: 'gemini-flash-fallback',                  label: 'Gemini 2.0 Flash',   provider: 'google'    as const },
+    // Pricing: 2.5 Pro $1.25/$10 · 2.5 Flash $0.30/$2.50 · 2.0 Flash $0.10/$0.40
+    { value: 'gemini-large-context',                   label: 'Gemini 2.5 Pro',   provider: 'google'    as const },
+    { value: 'gemini-2.5-flash',                       label: 'Gemini 2.5 Flash', provider: 'google'    as const },
+    { value: 'gemini-flash-fallback',                  label: 'Gemini 2.0 Flash', provider: 'google'    as const },
 ] as const;
 
 /** Human-readable labels for each task role */
