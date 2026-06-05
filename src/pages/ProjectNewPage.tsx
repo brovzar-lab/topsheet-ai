@@ -136,7 +136,9 @@ export function ProjectNewPage() {
             setStep('error');
             setErrorMsg(err instanceof Error ? err.message : 'Failed to parse PDF.');
         }
-    }, [title, apiKey]);
+        // B-07: apiKey removed from deps — it's not used directly here;
+        // analyzeScript reads it via the proxy client / settings store internally.
+    }, [title]);
 
     const onDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();

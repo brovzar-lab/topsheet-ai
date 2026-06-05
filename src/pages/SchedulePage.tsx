@@ -158,6 +158,32 @@ export function SchedulePage() {
         return map;
     }, [scenes]);
 
+    // P-03: Memoize conflict detection — only reruns when schedule changes
+    const conflicts = useMemo(
+        () => schedule ? detectConflicts(schedule) : [],
+        [schedule],
+    );
+    const conflictErrors   = useMemo(() => conflicts.filter((c) => c.severity === 'error'),   [conflicts]);
+    const conflictWarnings = useMemo(() => conflicts.filter((c) => c.severity === 'warning'), [conflicts]);
+
+    // B-06: Transient highlight state instead of direct classList mutation
+    const [highlightedDayNumber, setHighlightedDayNumber] = useState<number | null>(null);
+    const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const flashDay = useCallback((dayNum: number) => {
+        setActiveDayNumber(dayNum);
+        setHighlightedDayNumber(dayNum);
+        const el = document.querySelector(`[data-day-number="${dayNum}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => setHighlightedDayNumber(null), 1500);
+    }, [setActiveDayNumber]);
+
+    // Cleanup timer on unmount
+    useEffect(() => () => {
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    }, []);
+
     // DnD sensors — pointer with small activation distance to avoid accidental drags
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -329,7 +355,17 @@ export function SchedulePage() {
 
     // Compute summary stats (safe: projectId and scenes are guaranteed above)
     const totalDays = schedule?.shootDays.length ?? 0;
-    const totalScenes = schedule?.shootDays.reduce((sum, d) => sum + d.strips.length, 0) ?? 0;
+    // B-08: count unique sceneNumbers, not strips (splits create > 1 strip per scene)
+    const totalScenes = useMemo(() => {
+        if (!schedule) return 0;
+        const sceneNums = new Set<string>();
+        for (const day of schedule.shootDays) {
+            for (const strip of day.strips) {
+                sceneNums.add(strip.sceneNumber);
+            }
+        }
+        return sceneNums.size;
+    }, [schedule]);
     const totalPages = schedule?.shootDays.reduce((sum, d) => sum + d.totalPages, 0) ?? 0;
     const totalPagesDisplay = `${Math.floor(totalPages / 8)}${totalPages % 8 !== 0 ? ` ${totalPages % 8}/8` : ''}`;
 
@@ -513,63 +549,47 @@ export function SchedulePage() {
             </div>
 
             {/* ── Conflict Detection Panel ── */}
-            {schedule && (() => {
-                const conflicts = detectConflicts(schedule);
-                if (conflicts.length === 0) return null;
-                const errors = conflicts.filter((c) => c.severity === 'error');
-                const warnings = conflicts.filter((c) => c.severity === 'warning');
-                return (
-                    <div className="px-6 py-2 bg-lemon-bg-secondary/50 border-b border-lemon-gray-700 flex-shrink-0">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono text-[0.65rem] font-bold text-lemon-coral uppercase tracking-wider">
-                                ⚠ {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
+            {schedule && conflicts.length > 0 && (
+                <div className="px-6 py-2 bg-lemon-bg-secondary/50 border-b border-lemon-gray-700 flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-[0.65rem] font-bold text-lemon-coral uppercase tracking-wider">
+                            ⚠ {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
+                        </span>
+                        {conflictErrors.length > 0 && (
+                            <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 font-mono text-[0.5rem] rounded font-bold">
+                                {conflictErrors.length} error{conflictErrors.length !== 1 ? 's' : ''}
                             </span>
-                            {errors.length > 0 && (
-                                <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 font-mono text-[0.5rem] rounded font-bold">
-                                    {errors.length} error{errors.length !== 1 ? 's' : ''}
-                                </span>
-                            )}
-                            {warnings.length > 0 && (
-                                <span className="px-1.5 py-0.5 bg-lemon-yellow/20 text-lemon-yellow font-mono text-[0.5rem] rounded font-bold">
-                                    {warnings.length} warning{warnings.length !== 1 ? 's' : ''}
-                                </span>
-                            )}
-                        </div>
-                        <div className="space-y-0.5 max-h-24 overflow-y-auto">
-                            {conflicts.map((c) => (
-                                <button
-                                    key={c.id}
-                                    onClick={() => {
-                                        // Find the affected day number
-                                        const dayNum = c.dayNumber ?? null;
-                                        if (dayNum) {
-                                            setActiveDayNumber(dayNum);
-                                            // Scroll to the day element and flash-highlight it
-                                            const dayEl = document.querySelector(`[data-day-number="${dayNum}"]`);
-                                            if (dayEl) {
-                                                dayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                dayEl.classList.add('ring-2', 'ring-lemon-cyan', 'rounded-lg');
-                                                setTimeout(() => dayEl.classList.remove('ring-2', 'ring-lemon-cyan', 'rounded-lg'), 1500);
-                                            }
-                                        }
-                                        // Open Rafa with context
-                                        setAdContext({ dayNumber: dayNum ?? 0, issue: c.message });
-                                        setAdPanelOpen(true);
-                                    }}
-                                    className={`w-full text-left font-mono text-[0.6rem] flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors cursor-pointer
-                                        hover:bg-lemon-bg-elevated/60 ${c.severity === 'error' ? 'text-red-400' :
-                                        c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
-                                        }`}
-                                >
-                                    <span>{c.severity === 'error' ? '🔴' : c.severity === 'warning' ? '🟡' : 'ℹ️'}</span>
-                                    <span className="flex-1">{c.message}</span>
-                                    <ChevronRight size={10} className="opacity-40 flex-shrink-0" />
-                                </button>
-                            ))}
-                        </div>
+                        )}
+                        {conflictWarnings.length > 0 && (
+                            <span className="px-1.5 py-0.5 bg-lemon-yellow/20 text-lemon-yellow font-mono text-[0.5rem] rounded font-bold">
+                                {conflictWarnings.length} warning{conflictWarnings.length !== 1 ? 's' : ''}
+                            </span>
+                        )}
                     </div>
-                );
-            })()}
+                    <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                        {conflicts.map((c) => (
+                            <button
+                                key={c.id}
+                                onClick={() => {
+                                    const dayNum = c.dayNumber ?? null;
+                                    // B-06: use React state to flash-highlight instead of direct classList
+                                    if (dayNum) flashDay(dayNum);
+                                    setAdContext({ dayNumber: dayNum ?? 0, issue: c.message });
+                                    setAdPanelOpen(true);
+                                }}
+                                className={`w-full text-left font-mono text-[0.6rem] flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors cursor-pointer
+                                    hover:bg-lemon-bg-elevated/60 ${c.severity === 'error' ? 'text-red-400' :
+                                    c.severity === 'warning' ? 'text-lemon-yellow' : 'text-lemon-text-muted'
+                                    }`}
+                            >
+                                <span>{c.severity === 'error' ? '🔴' : c.severity === 'warning' ? '🟡' : 'ℹ️'}</span>
+                                <span className="flex-1">{c.message}</span>
+                                <ChevronRight size={10} className="opacity-40 flex-shrink-0" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* ── Main content row (stripboard + AD panel) ── */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -610,6 +630,8 @@ export function SchedulePage() {
                                     onUpdateNotes={handleUpdateNotes}
                                     onSplitScene={(dayId, stripId) => { splitStripAction(projectId, dayId, stripId); setExpandedStripId(null); }}
                                     onSetDayDate={(dayId, date) => setDayDate(projectId, dayId, date)}
+                                    // B-06: pass highlight flag so child can apply ring via className
+                                    highlighted={highlightedDayNumber === day.dayNumber}
                                 />
                             ))}
 
@@ -637,10 +659,11 @@ export function SchedulePage() {
                         schedule: schedule ?? undefined,
                         breakdowns,
                         activeDayNumber,
+                        // P-04: use pre-built content map instead of rebuilding the array each render
                         scenes: scenes.map((sc) => ({
                             sceneNumber: sc.sceneNumber,
                             slugline: sc.slugline,
-                            content: sc.content,
+                            content: sceneContentMap[sc.sceneNumber] ?? sc.content,
                             pageCount: sc.pageCount,
                         })),
                     }}

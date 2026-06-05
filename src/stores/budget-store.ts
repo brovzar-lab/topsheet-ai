@@ -74,15 +74,16 @@ export const useBudgetStore = create<BudgetState>()(
         // Only save line items that changed
         if (prev) {
             const prevIds = new Set(prev.lineItems.map((l) => l.id));
-            const newIds = new Set(updated.lineItems.map((l) => l.id));
+            const newIds  = new Set(updated.lineItems.map((l) => l.id));
             // Deleted lines
             const deletedIds = [...prevIds].filter((id) => !newIds.has(id));
             if (deletedIds.length > 0) {
                 bulkDeleteLineItems(uid, draftId, deletedIds).catch(console.error);
             }
-            // New or changed lines
+            // P-05: pre-index prev items into a Map for O(1) lookup instead of O(N²) find()
+            const prevMap = new Map(prev.lineItems.map((l) => [l.id, l]));
             const changedLines = updated.lineItems.filter((l) => {
-                const old = prev.lineItems.find((p) => p.id === l.id);
+                const old = prevMap.get(l.id);
                 return !old || JSON.stringify(old) !== JSON.stringify(l);
             });
             if (changedLines.length > 0) {

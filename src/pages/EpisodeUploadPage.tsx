@@ -87,15 +87,19 @@ export function EpisodeUploadPage() {
         updateEpisode,
     } = useSeriesStore();
 
-    // Load series + episodes if not already in store
+    // B-04: Load episodes only if we don't already have them for this series.
+    // The old guard `episodes[0]?.seriesId !== seriesId` was wrong — Episode
+    // objects don't have a seriesId field. Instead, compare against activeSeries.
     useEffect(() => {
         if (!user || !seriesId) return;
         if (activeSeries?.id !== seriesId) {
             loadSeries(user.uid, seriesId);
         }
-        if (episodes.length === 0 || episodes[0]?.seriesId !== seriesId) {
+        // Only reload episodes when we navigate to a different series
+        if (activeSeries?.id !== seriesId || episodes.length === 0) {
             loadEpisodes(user.uid, seriesId);
         }
+        // loadSeries and loadEpisodes are stable Zustand references — safe to omit
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, seriesId]);
 
@@ -183,7 +187,8 @@ export function EpisodeUploadPage() {
             setStep('error');
             setErrorMsg(err instanceof Error ? err.message : 'Failed to parse PDF.');
         }
-    }, [title, apiKey]);
+        // B-07: apiKey not used directly — analyzeScript reads it internally via proxy client
+    }, [title]);
 
     const onDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();

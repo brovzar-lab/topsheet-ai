@@ -27,6 +27,7 @@ export function DayGroup({
     onUpdateNotes,
     onSplitScene,
     onSetDayDate,
+    highlighted = false,
 }: {
     day: ShootDay;
     onRemoveDay: (dayId: string) => void;
@@ -44,6 +45,8 @@ export function DayGroup({
     onUpdateNotes: (stripId: string, notes: string) => void;
     onSplitScene: (dayId: string, stripId: string) => void;
     onSetDayDate: (dayId: string, date: string) => void;
+    /** When true, apply a brief cyan ring highlight (driven by React state, not classList) */
+    highlighted?: boolean;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const totalFullPages = Math.floor(day.totalPages / 8);
@@ -62,7 +65,10 @@ export function DayGroup({
     }, [day.strips]);
 
     return (
-        <div className="mb-4" data-day-number={day.dayNumber}>
+        <div
+            className={`mb-4 transition-shadow ${highlighted ? 'ring-2 ring-lemon-cyan rounded-lg' : ''}`}
+            data-day-number={day.dayNumber}
+        >
             {/* Day header */}
             <div
                 className="flex items-center gap-3 px-3 py-2 bg-lemon-bg-elevated rounded-t border border-lemon-gray-700 cursor-pointer hover:bg-lemon-bg-secondary/80 transition-colors"

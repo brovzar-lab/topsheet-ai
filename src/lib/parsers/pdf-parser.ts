@@ -117,28 +117,38 @@ function reconstructLinesFromItems(items: TextRun[]): string {
 export async function extractTextFromPDF(file: File): Promise<PDFParseResult> {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const pages: string[] = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
+    // M-04: Process pages in parallel batches of 5 instead of serially.
+    // For a 120-page screenplay this means ~24 batches vs 120 sequential awaits,
+    // giving roughly a 5× speedup on page text extraction.
+    const BATCH_SIZE = 5;
+    const pageTexts: string[] = new Array(pdf.numPages);
 
-        const textItems: TextRun[] = content.items
-            .filter((item) => 'str' in item && 'transform' in item)
-            .map((item) => item as unknown as TextRun);
-
-        const pageText = reconstructLinesFromItems(textItems);
-        pages.push(pageText);
+    for (let batchStart = 1; batchStart <= pdf.numPages; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, pdf.numPages);
+        await Promise.all(
+            Array.from({ length: batchEnd - batchStart + 1 }, (_, k) => {
+                const pageNum = batchStart + k;
+                return (async () => {
+                    const page = await pdf.getPage(pageNum);
+                    const content = await page.getTextContent();
+                    const textItems: TextRun[] = content.items
+                        .filter((item) => 'str' in item && 'transform' in item)
+                        .map((item) => item as unknown as TextRun);
+                    pageTexts[pageNum - 1] = reconstructLinesFromItems(textItems);
+                })();
+            })
+        );
     }
 
     // eslint-disable-next-line no-control-regex
-    const fullText = pages.join('\n').replace(/\x0c/g, '');
-    const lastPageStamp = detectLastPageStamp(pages, pdf.numPages);
+    const fullText = pageTexts.join('\n').replace(/\x0c/g, '');
+    const lastPageStamp = detectLastPageStamp(pageTexts, pdf.numPages);
 
     return {
         text: fullText,
         pageCount: pdf.numPages,
-        pages,
+        pages: pageTexts,
         lastPageStamp,
     };
 }

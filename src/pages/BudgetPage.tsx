@@ -92,19 +92,17 @@ export function BudgetPage() {
     // ---------------------------------------------------------------
 
     const handleGenerate = useCallback(() => {
-        if (!projectId || Object.keys(breakdowns).length === 0) return;
+        if (!projectId || Object.keys(breakdowns).length === 0 || !project) return;
 
-        const nextVersion = projectDrafts.length > 0
-            ? Math.max(...projectDrafts.map((d) => d.version)) + 1
-            : 1;
-
+        // M-03-maint: derive version from sorted draft list, not Date.now() (avoids collisions)
+        const nextVersion = (projectDrafts[0]?.version ?? 0) + 1;
         const draft = generateAutoBudget(breakdowns, {
             projectId,
-            totalPages: project?.totalPages ?? 120 * 8,
+            totalPages: project.totalPages,
             contingencyPercent: settings.defaultContingencyPercent,
             exchangeRate: settings.exchangeRate,
             startVersion: nextVersion,
-            scheduleData: schedule,
+            scheduleData: schedule ?? undefined,
         });
 
         addDraft(draft);

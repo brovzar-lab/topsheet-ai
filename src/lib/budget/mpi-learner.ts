@@ -14,8 +14,7 @@ import ExcelJS from 'exceljs';
 import { extractTextFromPDF } from '@/lib/parsers/pdf-parser';
 import { callLLM } from '@/lib/ai/proxyClient';
 import { useSettingsStore } from '@/stores/settings-store';
-import { MPI_DATA } from '@/data/mpi-data';
-import { getAllMPIItems } from '@/data/mpi-data';
+import { MPI_DATA, getAllMPIItems } from '@/data/mpi-data';
 import type { LearnedMPIRecord, MPIUploadResult } from '@/types';
 
 // -----------------------------------------------------------------------

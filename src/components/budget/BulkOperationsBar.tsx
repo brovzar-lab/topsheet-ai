@@ -76,14 +76,24 @@ export function BulkOperationsBar({ draft }: { draft: BudgetDraft }) {
                                 <span className="text-[0.6rem] font-mono text-lemon-text-muted">×</span>
                                 <input
                                     aria-label="Scale factor"
-                                    type="number" step="0.1" min="0.1" max="5"
+                                    type="number" step="0.1" min="0.01" max="10"
                                     value={scaleFactor}
                                     onChange={(e) => setScaleFactor(e.target.value)}
                                     className="w-14 px-1.5 py-1 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-xs text-lemon-text-primary font-mono text-center focus:border-lemon-cyan focus:outline-none"
                                 />
                                 <button
-                                    onClick={() => { bulkScaleLines(draft.id, [...selectedIds], parseFloat(scaleFactor) || 1); selectNone(); }}
-                                    className="px-2 py-1 bg-lemon-cyan/10 border border-lemon-cyan/30 text-lemon-cyan font-mono text-[0.6rem] font-bold rounded hover:bg-lemon-cyan/20 transition-colors"
+                                    onClick={() => {
+                                        // M-05: validate — reject NaN, zero, and out-of-range values
+                                        const parsed = parseFloat(scaleFactor);
+                                        if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 10) {
+                                            alert('Scale factor must be a positive number between 0.01 and 10.');
+                                            return;
+                                        }
+                                        bulkScaleLines(draft.id, [...selectedIds], parsed);
+                                        selectNone();
+                                    }}
+                                    disabled={!Number.isFinite(parseFloat(scaleFactor)) || parseFloat(scaleFactor) <= 0}
+                                    className="px-2 py-1 bg-lemon-cyan/10 border border-lemon-cyan/30 text-lemon-cyan font-mono text-[0.6rem] font-bold rounded hover:bg-lemon-cyan/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     Scale
                                 </button>

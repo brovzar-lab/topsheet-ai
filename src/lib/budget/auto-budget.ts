@@ -179,8 +179,13 @@ export function generateAutoBudget(
         const budgetCode = ELEMENT_TO_BUDGET[elem.categoryId];
         if (!budgetCode) continue;
 
-        // Find best MPI match for this budget code
-        const mpiMatch = allMPI.find((m) => m.categoryCode === budgetCode);
+        // M-03: Find best MPI match for this budget code by element name similarity,
+        // not just the first item in the category (which was always the wrong match).
+        const categoryItems = allMPI.filter((m) => m.categoryCode === budgetCode);
+        const nameNorm = elem.name.toLowerCase();
+        const mpiMatch =
+            categoryItems.find((m) => m.item.toLowerCase().includes(nameNorm) || nameNorm.includes(m.item.toLowerCase())) ??
+            categoryItems[0]; // genuine fallback: first item in correct category
         const rate = mpiMatch?.baseCostCentavos ?? 500_000; // fallback $5,000
 
         // Determine quantity and duration based on element type

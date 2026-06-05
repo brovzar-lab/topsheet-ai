@@ -26,12 +26,13 @@ export const DEFAULT_FRINGES: FringeConfig = {
     otPercent: 5,
 };
 
-/** Categories where IMSS applies (crew/production payroll). */
+/** Categories where IMSS applies (crew/production payroll only — NOT vendor services). */
 const IMSS_CATEGORIES: Set<BudgetCategoryCode> = new Set([
     '1200', '1300',                         // Producers, Direction
     '2000',                                 // Production Staff
     '2900', '3000', '3100', '3200',         // Grip, Electrical, Camera, Sound
-    '5000', '5100', '5200',                 // Editorial, Finishing, Post Sound
+    // NOTE: 5000/5100/5200 (Editorial, Finishing, Post Sound) intentionally excluded.
+    // Post-production houses bill as vendors — IMSS does not apply to vendor invoices.
 ]);
 
 /** Categories where ANDA applies (actors/cast). */

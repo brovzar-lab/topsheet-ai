@@ -44,6 +44,9 @@ export function TierComparison({
         });
 
         const scaleDraft = (draft: BudgetDraft, factor: number, tierName: string): BudgetDraft => {
+            // M-06: Scale ALL line items including fringe lines (IMSS, ANDA, OT are already
+            // present as separate line items in the base draft — they scale proportionally).
+            // No need to re-run calculateFringes() as fringes are baked in at generation time.
             const scaledItems = draft.lineItems.map((item) => ({
                 ...item,
                 rateCentavos: Math.round(item.rateCentavos * factor),

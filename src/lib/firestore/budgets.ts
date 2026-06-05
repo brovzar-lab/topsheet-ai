@@ -103,7 +103,8 @@ export async function loadDraftsForProject(
     );
     const projectDraftDocs = await getDocs(q);
 
-    // Assemble each draft with its line items
+    // P-02: All subcollection reads are fired concurrently via Promise.all
+    // (N draft headers → N parallel lineItems reads, not sequential)
     const drafts = await Promise.all(
         projectDraftDocs.docs.map(async (draftDoc) => {
             const header = draftDoc.data();
