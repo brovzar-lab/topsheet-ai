@@ -37,7 +37,7 @@ trap cleanup EXIT INT TERM
 
 # Start Firebase Functions emulator in background
 echo -e "${BLUE}[Functions]${NC} Starting emulator on port 5001..."
-(cd functions && npx firebase emulators:start --only functions 2>&1 | sed "s/^/  [functions] /") &
+firebase emulators:start --only functions 2>&1 | sed "s/^/  [functions] /" &
 EMU_PID=$!
 
 # Give the emulator a moment to boot
