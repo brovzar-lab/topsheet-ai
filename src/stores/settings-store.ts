@@ -130,13 +130,8 @@ export const useSettingsStore = create<SettingsState>()(
         }),
         {
             name: 'topsheet-settings',
-            partialize: (state) => {
-                // Exclude API keys from localStorage — re-seeded from env on reload
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { geminiApiKey, anthropicApiKey, ...rest } = state;
-                // keysValidated IS persisted so the gate doesn't show every reload
-                return rest;
-            },
+            // API keys ARE persisted — proxyClient.ts reads them from
+            // localStorage via getStoredApiKey() for the direct-API fallback.
         },
     ),
 );
