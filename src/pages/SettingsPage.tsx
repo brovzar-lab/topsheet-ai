@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Key, DollarSign, Eye, EyeOff, CheckCircle, Cpu, ChevronDown } from 'lucide-react';
+import { Settings, DollarSign, CheckCircle, Cpu, ChevronDown } from 'lucide-react';
 import { useSettingsStore, MODEL_OPTIONS, TASK_ROLE_LABELS } from '@/stores/settings-store';
 import type { TaskRole } from '@/stores/settings-store';
 import { AgentBrainsPanel } from '@/components/settings/AgentBrainsPanel';
 import { BrainMemoryPanel } from '@/components/settings/BrainMemoryPanel';
 import { MPILearnerPanel } from '@/components/settings/MPILearnerPanel';
 import { ResetDataPanel } from '@/components/settings/ResetDataPanel';
+import { ApiKeySection } from '@/components/settings/ApiKeySection';
 
 // Pre-group models for optgroup rendering
 const CLAUDE_MODELS = MODEL_OPTIONS.filter((m) => m.provider === 'anthropic');
@@ -42,8 +43,6 @@ export function SettingsPage() {
     const navigate = useNavigate();
 
     const {
-        geminiApiKey, setGeminiApiKey,
-        anthropicApiKey, setAnthropicApiKey,
         defaultModel, setDefaultModel,
         modelOverrides, setModelOverride, getModelForRole,
         exchangeRate, setExchangeRate,
@@ -51,24 +50,12 @@ export function SettingsPage() {
         defaultContingencyPercent, setDefaultContingencyPercent,
     } = useSettingsStore();
 
-    const [showGeminiKey, setShowGeminiKey] = useState(false);
-    const [showAnthropicKey, setShowAnthropicKey] = useState(false);
     const [showOverrides, setShowOverrides] = useState(false);
     const [saved, setSaved] = useState(false);
 
     function flash() {
         setSaved(true);
         setTimeout(() => setSaved(false), 1500);
-    }
-
-    function handleGeminiKeyChange(value: string) {
-        setGeminiApiKey(value);
-        flash();
-    }
-
-    function handleAnthropicKeyChange(value: string) {
-        setAnthropicApiKey(value);
-        flash();
     }
 
     function handleRateChange(value: string) {
@@ -178,71 +165,7 @@ export function SettingsPage() {
                 </div>
 
                 {/* ── API Keys ── */}
-                <div className="p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Key size={16} className="text-lemon-cyan" />
-                        <h3 className="text-lemon-text-primary">API Keys</h3>
-                    </div>
-                    <p className="text-xs text-lemon-text-muted mb-4">
-                        Only needed for local dev when the proxy server is unavailable.
-                    </p>
-
-                    {/* Gemini Key */}
-                    <div className="mb-4">
-                        <label className="text-xs text-lemon-text-body block mb-1.5">Gemini</label>
-                        <div className="relative">
-                            <input
-                                data-testid="gemini-api-key-input"
-                                aria-label="Gemini API key"
-                                type={showGeminiKey ? 'text' : 'password'}
-                                value={geminiApiKey}
-                                onChange={(e) => handleGeminiKeyChange(e.target.value)}
-                                placeholder="Enter your Gemini API key..."
-                                className="w-full px-4 py-3 pr-12 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-lemon-text-primary font-mono text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowGeminiKey(!showGeminiKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-lemon-gray-400 hover:text-lemon-text-primary transition-colors"
-                            >
-                                {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                        {geminiApiKey && (
-                            <p className="mt-1 text-xs text-lemon-cyan">
-                                Key configured ({geminiApiKey.length} chars)
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Anthropic Key */}
-                    <div>
-                        <label className="text-xs text-lemon-text-body block mb-1.5">Anthropic</label>
-                        <div className="relative">
-                            <input
-                                data-testid="anthropic-api-key-input"
-                                aria-label="Anthropic API key"
-                                type={showAnthropicKey ? 'text' : 'password'}
-                                value={anthropicApiKey}
-                                onChange={(e) => handleAnthropicKeyChange(e.target.value)}
-                                placeholder="Enter your Anthropic API key..."
-                                className="w-full px-4 py-3 pr-12 bg-lemon-bg-tertiary border border-lemon-gray-700 rounded text-lemon-text-primary font-mono text-sm focus:border-lemon-cyan focus:outline-none transition-colors"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-lemon-gray-400 hover:text-lemon-text-primary transition-colors"
-                            >
-                                {showAnthropicKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                        {anthropicApiKey && (
-                            <p className="mt-1 text-xs text-lemon-cyan">
-                                Key configured ({anthropicApiKey.length} chars)
-                            </p>
-                        )}
-                    </div>
-                </div>
+                <ApiKeySection />
 
                 {/* ── Exchange Rate ── */}
                 <div className="p-6 bg-lemon-bg-secondary border border-lemon-gray-700 rounded-lg">

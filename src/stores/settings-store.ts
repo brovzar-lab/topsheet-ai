@@ -48,6 +48,9 @@ interface SettingsState {
     geminiApiKey: string;
     anthropicApiKey: string;
 
+    // Key validation gate
+    keysValidated: boolean;
+
     // Model selection
     defaultModel: string;
     modelOverrides: Partial<Record<TaskRole, string>>;
@@ -60,6 +63,7 @@ interface SettingsState {
     // Actions — API keys
     setGeminiApiKey: (key: string) => void;
     setAnthropicApiKey: (key: string) => void;
+    setKeysValidated: (validated: boolean) => void;
 
     // Actions — models
     setDefaultModel: (model: string) => void;
@@ -83,6 +87,9 @@ export const useSettingsStore = create<SettingsState>()(
             geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY ?? '',
             anthropicApiKey: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
 
+            // Key validation gate
+            keysValidated: false,
+
             // Model selection
             defaultModel: 'gemini-2.5-flash',
             modelOverrides: {},
@@ -95,6 +102,7 @@ export const useSettingsStore = create<SettingsState>()(
             // Setters — API keys
             setGeminiApiKey: (key) => set({ geminiApiKey: key }),
             setAnthropicApiKey: (key) => set({ anthropicApiKey: key }),
+            setKeysValidated: (validated) => set({ keysValidated: validated }),
 
             // Setters — models
             setDefaultModel: (model) => set({ defaultModel: model }),
@@ -126,6 +134,7 @@ export const useSettingsStore = create<SettingsState>()(
                 // Exclude API keys from localStorage — re-seeded from env on reload
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { geminiApiKey, anthropicApiKey, ...rest } = state;
+                // keysValidated IS persisted so the gate doesn't show every reload
                 return rest;
             },
         },
