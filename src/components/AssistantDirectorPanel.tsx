@@ -22,7 +22,7 @@ import {
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useBudgetStore } from '@/stores/budget-store';
-import { useChatStore } from '@/stores/chat-store';
+import { useChatStore, type ChatMessage } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useMemoryStore } from '@/stores/memory-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -686,16 +686,15 @@ export function AssistantDirectorPanel({
     isPrimary?: boolean;
 }) {
     // ── Persistent thread from Zustand store (survives page navigation) ──
-    const rawMessages          = useChatStore((s) => s.rafaMessages);
-    const setRawMessages       = useChatStore((s) => s.setRafaMessages);
+    const rawMessages          = useChatStore((s) => s.getRafaMessages(projectId));
+    const setRafaMessages      = useChatStore((s) => s.setRafaMessages);
     const setRafaSystemPrompt  = useChatStore((s) => s.setRafaSystemPrompt);
     // Sandra's cached context so Rafa can invoke her even when she's not mounted
     const sandraSystemPrompt    = useChatStore((s) => s.sandraSystemPrompt);
-    const sandraMessages        = useChatStore((s) => s.sandraMessages);
+    const sandraMessages        = useChatStore((s) => s.getSandraMessages(projectId));
 
     // Cast to panel-local Message type
     const messages = rawMessages as Message[];
-    const setMessages = setRawMessages as (u: Message[] | ((p: Message[]) => Message[])) => void;
 
     // chatMode: in breakdown pageMode uses 'scene'|'all-scenes'; in schedule uses 'day'|'schedule'
     const [chatMode, setChatMode] = useState<string>(
@@ -705,10 +704,10 @@ export function AssistantDirectorPanel({
 
     const setMessagesStable = useCallback(
         (updater: Message[] | ((prev: Message[]) => Message[])) => {
-            setMessages(updater);
+            setRafaMessages(projectId, updater as ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]));
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [],
+        [projectId],
     );
 
     const [input, setInput] = useState('');
@@ -740,10 +739,10 @@ export function AssistantDirectorPanel({
     }, [messages, isLoading]);
 
     const clearChat = useCallback(() => {
-        setMessages([]);
+        setRafaMessages(projectId, []);
         setInput('');
         prevContextRef.current = null;
-    }, [setMessages]);
+    }, [setRafaMessages, projectId]);
 
     const copyAll = useCallback(() => {
         const text = messages.map(m => `${m.role === 'user' ? 'You' : 'Rafa'}: ${m.content}`).join('\n\n');

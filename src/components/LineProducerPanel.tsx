@@ -22,7 +22,7 @@ import {
 import { useBreakdownStore } from '@/stores/breakdown-store';
 import { useScheduleStore } from '@/stores/schedule-store';
 import { useBudgetStore } from '@/stores/budget-store';
-import { useChatStore } from '@/stores/chat-store';
+import { useChatStore, type ChatMessage } from '@/stores/chat-store';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useMemoryStore } from '@/stores/memory-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -656,26 +656,26 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
     isPrimary?: boolean;
 }) {
     // ── Persistent thread from Zustand store (survives page navigation) ──
-    const rawMessages         = useChatStore((s) => s.sandraMessages);
-    const setRawMessages      = useChatStore((s) => s.setSandraMessages);
+    const chatProjectId = snapshot?.projectId ?? '';
+    const rawMessages         = useChatStore((s) => s.getSandraMessages(chatProjectId));
+    const setSandraMessages   = useChatStore((s) => s.setSandraMessages);
     const setSandraSystemPrompt = useChatStore((s) => s.setSandraSystemPrompt);
     // Rafa's cached context so Sandra can invoke him even when he's not mounted
     const rafaSystemPrompt    = useChatStore((s) => s.rafaSystemPrompt);
-    const rafaMessages        = useChatStore((s) => s.rafaMessages);
+    const rafaMessages        = useChatStore((s) => s.getRafaMessages(chatProjectId));
 
     // Cast to panel-local Message type (store uses unknown[] for actions)
     const messages = rawMessages as Message[];
-    const setMessages = setRawMessages as (u: Message[] | ((p: Message[]) => Message[])) => void;
 
     const [chatMode, setChatMode] = useState<'scene' | 'project'>('scene');
     const activeScene = snapshot?.activeSceneNumber ?? null;
 
     const setMessagesStable = useCallback(
         (updater: Message[] | ((prev: Message[]) => Message[])) => {
-            setMessages(updater);
+            setSandraMessages(chatProjectId, updater as ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]));
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [],
+        [chatProjectId],
     );
 
     const [input, setInput] = useState('');
@@ -819,10 +819,10 @@ export function LineProducerPanel({ context, snapshot, isOpen, onToggle, side = 
     }, [input, isLoading, messages, systemPrompt, rafaSystemPrompt, rafaMessages, executeCrossConsult, setMessagesStable]);
 
     const clearChat = useCallback(() => {
-        setMessages([]);
+        setSandraMessages(chatProjectId, []);
         setInput('');
         prevContextRef.current = null;
-    }, [setMessages]);
+    }, [setSandraMessages, chatProjectId]);
 
     const copyAll = useCallback(() => {
         const text = messages.map(m => `${m.role === 'user' ? 'You' : 'Sandra'}: ${m.content}`).join('\n\n');

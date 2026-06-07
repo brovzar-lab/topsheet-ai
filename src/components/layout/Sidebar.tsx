@@ -262,7 +262,7 @@ function ProjectList({
                     />
                 )}
                 <div className="mt-4 border-t border-lemon-gray-700 pt-3">
-                    <span className="lemon-label block px-4 mb-2">FEATURE FILMS</span>
+                    <span className="lemon-label block px-4 mb-2">FEATURE FILMS <span className="text-lemon-text-muted font-normal">({projects.length})</span></span>
                     {projects.map((p) => (
                         <div key={p.id} className="relative flex items-center group/item">
                             <NavLink
@@ -271,7 +271,7 @@ function ProjectList({
                             >
                                 <Film size={13} className="flex-shrink-0 mt-0.5" />
                                 <div className="min-w-0 flex-1">
-                                    <div className="font-mono text-[0.65rem] tracking-wider truncate">{p.title}</div>
+                                    <div className="font-mono text-xs tracking-wider truncate">{p.title}</div>
                                     {(p.updatedAt || p.createdAt) && (
                                         <div className="font-mono text-[0.55rem] text-lemon-gray-600 mt-0.5">
                                             {fmtDate(p.updatedAt ?? p.createdAt)}
@@ -279,14 +279,14 @@ function ProjectList({
                                     )}
                                 </div>
                             </NavLink>
-                            {/* Delete button — visible on hover */}
+                            {/* Delete button — always visible, subtle until hovered */}
                             <button
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(p.id, p.title, 'film'); }}
                                 aria-label="Delete project"
                                 title="Delete project"
-                                className="absolute right-2 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10"
+                                className="absolute right-2 p-1.5 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10 transition-colors"
                             >
-                                <Trash2 size={11} />
+                                <Trash2 size={14} />
                             </button>
                         </div>
                     ))}
@@ -306,7 +306,7 @@ function ProjectList({
                 />
             )}
             <div className="mt-4 border-t border-lemon-gray-700 pt-3">
-                <span className="lemon-label block px-4 mb-2">TV SERIES</span>
+                <span className="lemon-label block px-4 mb-2">TV SERIES <span className="text-lemon-text-muted font-normal">({allSeries.length})</span></span>
                 {allSeries.map((s) => (
                     <div key={s.id} className="relative flex items-center group/item">
                         <NavLink
@@ -315,7 +315,7 @@ function ProjectList({
                         >
                             <Tv size={13} className="flex-shrink-0 mt-0.5" />
                             <div className="min-w-0 flex-1">
-                                <div className="font-mono text-[0.65rem] tracking-wider truncate">{s.title}</div>
+                                <div className="font-mono text-xs tracking-wider truncate">{s.title}</div>
                                 {(s.updatedAt || s.createdAt) && (
                                     <div className="font-mono text-[0.55rem] text-lemon-gray-600 mt-0.5">
                                         {fmtDate(s.updatedAt ?? s.createdAt)}
@@ -323,14 +323,14 @@ function ProjectList({
                                 )}
                             </div>
                         </NavLink>
-                        {/* Delete button — visible on hover */}
+                        {/* Delete button — always visible, subtle until hovered */}
                         <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(s.id, s.title, 'tv'); }}
                             aria-label="Delete series"
                             title="Delete series"
-                            className="absolute right-2 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10"
+                            className="absolute right-2 p-1.5 rounded text-lemon-gray-600 hover:text-lemon-coral hover:bg-lemon-coral/10 transition-colors"
                         >
-                            <Trash2 size={11} />
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 ))}

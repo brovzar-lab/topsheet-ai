@@ -9,6 +9,7 @@ import {
 import { saveProjectContent, loadProjectContent } from '@/lib/firestore/project-content';
 import { getCurrentUid } from '@/lib/auth-state';
 import { useMemoryStore } from '@/stores/memory-store';
+import { useChatStore } from '@/stores/chat-store';
 
 interface ProjectState {
     projects: Project[];
@@ -75,6 +76,10 @@ export const useProjectStore = create<ProjectState>()(
             // 🧠 Brain: clean slate — delete all project-scoped memories
             useMemoryStore.getState().deleteProjectMemories(uid, id).catch(console.error);
         }
+        // 💬 Chat: clean up orphaned chat threads for this project
+        const { clearThread } = useChatStore.getState();
+        clearThread('sandra', id);
+        clearThread('rafa', id);
     },
 
     clearAll: () => set({ projects: [], activeProjectId: null }),
