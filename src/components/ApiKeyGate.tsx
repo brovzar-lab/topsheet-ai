@@ -12,7 +12,12 @@ import { validateGeminiKey, validateAnthropicKey } from '@/lib/ai/validate-api-k
 type KeyStatus = 'idle' | 'validating' | 'valid' | 'invalid';
 
 export function ApiKeyGate({ children }: { children: React.ReactNode }) {
-    const { keysValidated, setKeysValidated, setGeminiApiKey, setAnthropicApiKey } = useSettingsStore();
+    const {
+        keysValidated, setKeysValidated,
+        setGeminiApiKey, setAnthropicApiKey,
+        geminiApiKey: storedGeminiKey,
+        anthropicApiKey: storedAnthropicKey,
+    } = useSettingsStore();
 
     const [geminiKey, setGeminiKey] = useState('');
     const [anthropicKey, setAnthropicKey] = useState('');
@@ -61,9 +66,15 @@ export function ApiKeyGate({ children }: { children: React.ReactNode }) {
         }, 600);
     }, [setKeysValidated]);
 
-    // If already validated, render children directly
-    if (keysValidated) {
+    // Only bypass if validated AND at least one key actually exists.
+    // If the flag is stale (keys were cleared/lost), reset it and re-gate.
+    const hasStoredKeys = !!(storedGeminiKey?.trim() || storedAnthropicKey?.trim());
+    if (keysValidated && hasStoredKeys) {
         return <>{children}</>;
+    }
+    // Reset stale flag
+    if (keysValidated && !hasStoredKeys) {
+        setKeysValidated(false);
     }
 
     return (
@@ -280,7 +291,7 @@ export function ApiKeyGate({ children }: { children: React.ReactNode }) {
                         </button>
 
                         <p className="mt-4 text-center text-[10px] text-lemon-gray-500 font-body">
-                            Keys are stored in memory only — never sent to our servers.
+                            Keys are stored locally in your browser — never sent to our servers.
                             <br />
                             You can update them later in Settings → API Keys.
                         </p>
