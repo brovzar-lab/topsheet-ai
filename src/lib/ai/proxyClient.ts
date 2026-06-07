@@ -21,11 +21,22 @@
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 import { getIdToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useSettingsStore } from '@/stores/settings-store';
 
-// Lazy import to avoid circular dep — settings-store imports nothing from ai/
+// Read API key from the live Zustand store (in-memory, always current).
+// Falls back to parsing localStorage if hydration hasn't completed yet.
 function getStoredApiKey(provider: 'gemini' | 'anthropic'): string {
+  // Primary: read from Zustand store's current in-memory state
   try {
-    // Zustand persist stores state under the store name key in localStorage
+    const state = useSettingsStore.getState();
+    const key = provider === 'gemini' ? state.geminiApiKey : state.anthropicApiKey;
+    if (key) return key;
+  } catch {
+    // Store not initialized yet — fall through
+  }
+
+  // Fallback: parse localStorage directly (early boot / SSR)
+  try {
     const raw = localStorage.getItem('topsheet-settings');
     if (!raw) return '';
     const parsed = JSON.parse(raw) as { state?: { geminiApiKey?: string; anthropicApiKey?: string } };
@@ -198,7 +209,14 @@ async function callClaudeDirect(options: LLMRequest): Promise<LLMResponse> {
     );
   }
   // Check env var first, then fall back to key stored in Settings UI
-  const apiKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined) || getStoredApiKey('anthropic');
+  const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
+  const storedKey = getStoredApiKey('anthropic');
+  const apiKey = envKey || storedKey;
+
+  if (import.meta.env.DEV) {
+    console.info('[proxyClient] Anthropic key sources — env:', !!envKey, 'store:', !!storedKey, 'final:', !!apiKey);
+  }
+
   if (!apiKey) {
     throw new Error(
       'LLM proxy is unavailable and no Anthropic API key is configured. ' +
