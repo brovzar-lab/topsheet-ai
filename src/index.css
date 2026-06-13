@@ -158,3 +158,77 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-lemon-gray-500);
 }
+
+/* ============ ACTION EXECUTION ANIMATIONS ============ */
+
+/* Spinning ring around scene icons during action execution */
+@keyframes action-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Color transition: red → orange → green during execution */
+@keyframes action-color-shift {
+  0%   { stroke: #ef4444; }
+  40%  { stroke: #f59e0b; }
+  100% { stroke: #22c55e; }
+}
+
+/* Green pulse on success — glows then fades */
+@keyframes action-success-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+/* Checkmark stroke-draw animation */
+@keyframes checkmark-draw {
+  0%   { stroke-dashoffset: 20; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Left-border glow for active scenes */
+@keyframes border-glow-cyan {
+  0%, 100% { border-left-color: rgba(0, 229, 200, 0.3); }
+  50%      { border-left-color: rgba(0, 229, 200, 0.9); }
+}
+
+/* Progress bar fill animation */
+@keyframes progress-fill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+/* Fade in for new checklist items */
+@keyframes checklist-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Utility classes for action animations */
+@layer utilities {
+  .action-ring-spin {
+    animation: action-spin 1s linear infinite;
+  }
+
+  .action-ring-color {
+    animation: action-color-shift 1.5s ease-in-out forwards;
+  }
+
+  .action-success-glow {
+    animation: action-success-pulse 0.8s ease-out;
+  }
+
+  .action-border-glow {
+    animation: border-glow-cyan 1.2s ease-in-out infinite;
+  }
+
+  .action-checklist-enter {
+    animation: checklist-fade-in 0.3s ease-out forwards;
+  }
+
+  .action-checkmark-draw {
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    animation: checkmark-draw 0.4s ease-out forwards;
+  }
+}

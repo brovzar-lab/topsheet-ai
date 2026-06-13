@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, User2, Trash2 } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { ShootDay, SceneBreakdown } from '@/types';
 import { SortableStrip } from '@/components/schedule/SortableStrip';
+import { useActionActivityStore } from '@/stores/action-activity-store';
 
 type ColumnKey = 'sceneNumber' | 'intExt' | 'location' | 'timeOfDay' | 'pages' | 'cast';
 
@@ -64,9 +65,18 @@ export function DayGroup({
         return set;
     }, [day.strips]);
 
+    const dayActivity = useActionActivityStore((s) => s.getDayStatus(day.id));
+    const isActivityActive = dayActivity === 'running';
+    const activitySuccess = dayActivity === 'success';
+
     return (
         <div
-            className={`mb-4 transition-shadow ${highlighted ? 'ring-2 ring-lemon-cyan rounded-lg' : ''}`}
+            className={`mb-4 transition-shadow ${
+                isActivityActive ? 'ring-2 ring-lemon-cyan/60 rounded-lg action-border-glow'
+                : activitySuccess ? 'ring-2 ring-green-500/40 rounded-lg action-success-glow'
+                : highlighted ? 'ring-2 ring-lemon-cyan rounded-lg'
+                : ''
+            }`}
             data-day-number={day.dayNumber}
         >
             {/* Day header */}

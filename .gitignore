@@ -41,3 +41,6 @@ docs/test-screenplays/
 .playwright-mcp/
 .claude-md-backups/
 firebase-debug.log
+
+# Graphify knowledge graph
+graphify-out/

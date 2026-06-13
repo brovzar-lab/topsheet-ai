@@ -76,6 +76,12 @@ export interface LLMRequest {
    * No-op for Gemini models.
    */
   cacheSystemPrompt?: boolean;
+  /**
+   * For Gemini 2.5+ models: set to 0 to disable "thinking" phase,
+   * which otherwise adds 30-90s latency on large prompts.
+   * Defaults to 0 for chat interactions.
+   */
+  thinkingBudget?: number;
 }
 
 export interface LLMResponse {
@@ -179,6 +185,12 @@ async function callGeminiDirect(options: LLMRequest): Promise<LLMResponse> {
   };
   if (options.jsonMode) generationConfig.responseMimeType = 'application/json';
   if (options.maxTokens) generationConfig.maxOutputTokens = options.maxTokens;
+
+  // Allow some thinking so the model can construct valid JSON with real IDs.
+  // 0 = model can't reason at all (fails to produce [ACTIONS]).
+  // 2048 = ~3-8s extra latency, but model can plan structured output.
+  const thinkingBudget = options.thinkingBudget ?? 2048;
+  generationConfig.thinkingConfig = { thinkingBudget };
 
   const model = genAI.getGenerativeModel({
     model: resolveGeminiModel(options.model),

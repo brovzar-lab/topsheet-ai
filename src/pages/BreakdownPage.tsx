@@ -40,6 +40,73 @@ import type { ScheduleSnapshot } from '@/components/AssistantDirectorPanel';
 import { useAgentBrainStore } from '@/stores/agent-brain-store';
 import { useMemoryStore } from '@/stores/memory-store';
 import { BrainstormPanel, FigureItOutButton } from '@/components/BrainstormPanel';
+import { useActionActivityStore } from '@/stores/action-activity-store';
+
+// -----------------------------------------------------------------------
+// Scene sidebar with activity overlay — separate component to isolate re-renders
+// -----------------------------------------------------------------------
+
+function SceneListWithActivity({
+    scenes,
+    breakdowns,
+    selectedScene,
+    setSelectedScene,
+    failures,
+}: {
+    scenes: import('@/types').Scene[];
+    breakdowns: Record<string, import('@/types').SceneBreakdown>;
+    selectedScene: string | null;
+    setSelectedScene: (s: string) => void;
+    failures: { sceneNumber: string }[];
+}) {
+    // Subscribe to activities array — triggers re-render when any activity changes
+    const activities = useActionActivityStore((s) => s.activities);
+    const getSceneStatus = useActionActivityStore((s) => s.getSceneStatus);
+
+    return (
+        <>
+            {scenes.map((scene) => {
+                const bd = breakdowns[scene.sceneNumber];
+                const isSelected = scene.sceneNumber === selectedScene;
+                const hasFailed = failures.some((f) => f.sceneNumber === scene.sceneNumber);
+                const status = hasFailed
+                    ? 'error'
+                    : bd
+                    ? bd.reviewed ? 'reviewed' : 'done'
+                    : 'pending';
+                // Use getSceneStatus (which reads from subscribed activities)
+                const sceneActivity = getSceneStatus(scene.sceneNumber);
+                const isActive = sceneActivity === 'running';
+
+                return (
+                    <button
+                        key={scene.sceneNumber}
+                        onClick={() => setSelectedScene(scene.sceneNumber)}
+                        className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm transition-all ${isSelected
+                            ? 'bg-lemon-bg-primary border-l-2 border-lemon-cyan text-lemon-text-primary'
+                            : isActive
+                                ? 'border-l-2 action-border-glow bg-lemon-cyan/5 text-lemon-text-primary'
+                                : 'border-l-2 border-transparent text-lemon-text-body hover:bg-lemon-bg-primary/50'
+                            }${sceneActivity === 'success' ? ' action-success-glow' : ''}`}
+                    >
+                        <SceneStatusIcon status={status} sceneNumber={scene.sceneNumber} />
+                        <div className="flex-1 min-w-0">
+                            <span className="font-mono text-xs text-lemon-text-muted">
+                                {scene.sceneNumber}
+                            </span>
+                            <p className="truncate text-xs">
+                                {scene.slugline.location}
+                            </p>
+                        </div>
+                        {isSelected && (
+                            <ChevronRight size={14} className="text-lemon-cyan flex-shrink-0" />
+                        )}
+                    </button>
+                );
+            })}
+        </>
+    );
+}
 
 // -----------------------------------------------------------------------
 // Main component
@@ -286,40 +353,7 @@ export function BreakdownPage() {
                 </div>
 
                 <div className="py-1">
-                    {scenes.map((scene) => {
-                        const bd = breakdowns[scene.sceneNumber];
-                        const isSelected = scene.sceneNumber === selectedScene;
-                        const hasFailed = failures.some((f) => f.sceneNumber === scene.sceneNumber);
-                        const status = hasFailed
-                            ? 'error'
-                            : bd
-                            ? bd.reviewed ? 'reviewed' : 'done'
-                            : 'pending';
-
-                        return (
-                            <button
-                                key={scene.sceneNumber}
-                                onClick={() => setSelectedScene(scene.sceneNumber)}
-                                className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${isSelected
-                                    ? 'bg-lemon-bg-primary border-l-2 border-lemon-cyan text-lemon-text-primary'
-                                    : 'border-l-2 border-transparent text-lemon-text-body hover:bg-lemon-bg-primary/50'
-                                    }`}
-                            >
-                                <SceneStatusIcon status={status} />
-                                <div className="flex-1 min-w-0">
-                                    <span className="font-mono text-xs text-lemon-text-muted">
-                                        {scene.sceneNumber}
-                                    </span>
-                                    <p className="truncate text-xs">
-                                        {scene.slugline.location}
-                                    </p>
-                                </div>
-                                {isSelected && (
-                                    <ChevronRight size={14} className="text-lemon-cyan flex-shrink-0" />
-                                )}
-                            </button>
-                        );
-                    })}
+                    <SceneListWithActivity scenes={scenes} breakdowns={breakdowns} selectedScene={selectedScene} setSelectedScene={setSelectedScene} failures={failures} />
                 </div>
             </aside>
 
