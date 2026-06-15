@@ -2,16 +2,23 @@
  * eficine.ts — EFICINE Tax Incentive Calculator for Mexican Film Productions.
  *
  * EFICINE (Estímulo Fiscal a Proyectos de Inversión en la Producción
- * Cinematográfica Nacional) provides a tax credit of up to 10% of the
- * investor's income tax liability for investments in Mexican film production.
+ * Cinematográfica Nacional) grants the investor (contribuyente aportante) a
+ * tax credit equal to 100% of the amount they contribute to the project —
+ * NOT a percentage of the production budget.
  *
  * Art. 189 LISR — Key rules:
- * - Credit = 10% of eligible production expenses in Mexico
- * - Maximum credit per project: $20,000,000 MXN (2,000,000,000 centavos)
- * - Maximum total annual pool: $500,000,000 MXN
- * - Investment must be 100% in eligible production expenses in Mexico
- * - Eligible expenses: crew salaries, equipment rental, location fees,
- *   post-production, distribution preparation (all while in Mexico)
+ * - Credit = 100% of the investor's contribution (aportación)
+ * - The credit may not exceed 10% of the investor's ISR from the prior fiscal
+ *   year (an investor-side limit — depends on the investor, not the project)
+ * - Maximum credit per Production project: $25,000,000 MXN (2,500,000,000
+ *   centavos) — updated for 2026 (was $20M); Distribution projects cap at $3M
+ * - Regla 80/20: total federal stimulus may not exceed 80% of total project
+ *   cost; the producer / third parties must cover the remaining ≥20%
+ *
+ * This calculator works from the project budget alone, so it reports the
+ * MAXIMUM credit a project can legally attract: min($25M, budget × 80%).
+ * The investor-side 10%-of-ISR limit is investor-specific and applied
+ * separately (flagged as a note in the UI).
  *
  * @see https://www.sat.gob.mx/normatividad/20907/estímulo-fiscal-producción-cinematografica
  */
@@ -19,11 +26,11 @@
 import type { BudgetDraft, BudgetSection } from '@/types';
 import { getSection } from './calculator';
 
-/** EFICINE credit rate per Art. 189 LISR: 10% of eligible spend */
-const EFICINE_CREDIT_RATE = 0.10;
+/** Maximum EFICINE credit per Production project in centavos ($25,000,000 MXN, updated 2026) */
+const MAX_CREDIT_CENTAVOS = 2_500_000_000; // $25,000,000 MXN
 
-/** Maximum EFICINE credit per project in centavos ($20,000,000 MXN) */
-const MAX_CREDIT_CENTAVOS = 2_000_000_000; // $20,000,000 MXN
+/** Regla 80/20 — total federal stimulus may not exceed 80% of total project cost */
+const MAX_BUDGET_SHARE = 0.80;
 
 /** EFICINE-eligible budget category codes */
 const ELIGIBLE_CATEGORIES: Set<string> = new Set([
@@ -55,10 +62,12 @@ export interface EFICINEResult {
     eligibleExpensesCentavos: number;
     /** Percentage of budget that is eligible */
     eligiblePercent: number;
-    /** Calculated credit (10% of eligible, capped at MAX_CREDIT_CENTAVOS) */
+    /** Maximum creditable amount: min($25M hard cap, total budget × 80%) */
     creditCentavos: number;
-    /** Whether the credit was capped */
+    /** Whether the $25M hard cap is the binding constraint */
     wasCapped: boolean;
+    /** Which limit determined the credit: the $25M hard cap or the 80/20 budget share */
+    cappedBy: 'hard_cap' | 'budget_share';
     /** Effective tax benefit rate */
     effectiveRate: number;
     /** Breakdown by section */
@@ -107,10 +116,15 @@ export function calculateEFICINE(draft: BudgetDraft): EFICINEResult {
         }
     }
 
-    // Art. 189 LISR: credit = 10% of eligible spend, capped at $20M MXN
-    const rawCredit = Math.round(eligibleExpensesCentavos * EFICINE_CREDIT_RATE);
-    const creditCentavos = Math.min(rawCredit, MAX_CREDIT_CENTAVOS);
-    const wasCapped = rawCredit > MAX_CREDIT_CENTAVOS;
+    // Art. 189 LISR: the credit equals the investor's contribution (100%), bounded
+    // by the project-side limits we can derive from the budget — the $25M hard cap
+    // and the regla 80/20 (≤ 80% of total project cost). The investor-side limit
+    // (≤ 10% of the investor's prior-year ISR) is applied separately.
+    const budgetShareCapCentavos = Math.round(totalBudgetCentavos * MAX_BUDGET_SHARE);
+    const creditCentavos = Math.min(budgetShareCapCentavos, MAX_CREDIT_CENTAVOS);
+    const cappedBy: 'hard_cap' | 'budget_share' =
+        budgetShareCapCentavos > MAX_CREDIT_CENTAVOS ? 'hard_cap' : 'budget_share';
+    const wasCapped = cappedBy === 'hard_cap';
     const eligiblePercent = totalBudgetCentavos > 0
         ? Math.round((eligibleExpensesCentavos / totalBudgetCentavos) * 100)
         : 0;
@@ -132,6 +146,7 @@ export function calculateEFICINE(draft: BudgetDraft): EFICINEResult {
         eligiblePercent,
         creditCentavos,
         wasCapped,
+        cappedBy,
         effectiveRate,
         sectionBreakdown,
         ineligibleItems,

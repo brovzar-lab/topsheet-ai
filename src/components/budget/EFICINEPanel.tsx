@@ -27,7 +27,7 @@ export function EFICINEPanel({ draft }: { draft: BudgetDraft }) {
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="font-display font-black text-sm text-green-400">
-                        Credit: {formatMXN(result.creditCentavos, true)}
+                        Max Credit: {formatMXN(result.creditCentavos, true)}
                     </span>
                     {open ? <ChevronUp size={14} className="text-lemon-text-muted" /> : <ChevronDown size={14} className="text-lemon-text-muted" />}
                 </div>
@@ -41,7 +41,7 @@ export function EFICINEPanel({ draft }: { draft: BudgetDraft }) {
                             { label: 'Total Budget', value: formatMXN(result.totalBudgetCentavos, true), color: 'text-lemon-text-primary' },
                             { label: 'Eligible Expenses', value: formatMXN(result.eligibleExpensesCentavos, true), color: 'text-lemon-cyan' },
                             { label: 'Eligible %', value: `${result.eligiblePercent}%`, color: 'text-lemon-yellow' },
-                            { label: 'Tax Credit', value: formatMXN(result.creditCentavos, true), color: 'text-green-400' },
+                            { label: 'Max Credit', value: formatMXN(result.creditCentavos, true), color: 'text-green-400' },
                         ].map((stat) => (
                             <div key={stat.label} className="p-3 bg-lemon-bg-secondary rounded-lg">
                                 <p className="text-[0.55rem] font-mono text-lemon-text-muted uppercase tracking-wider mb-1">{stat.label}</p>
@@ -50,11 +50,16 @@ export function EFICINEPanel({ draft }: { draft: BudgetDraft }) {
                         ))}
                     </div>
 
-                    {result.wasCapped && (
-                        <div className="px-3 py-2 bg-lemon-yellow/10 border border-lemon-yellow/30 rounded text-xs text-lemon-yellow font-mono">
-                            ⚠ Credit capped at $20,000,000 MXN per project (EFICINE maximum)
-                        </div>
-                    )}
+                    <div className="px-3 py-2 bg-lemon-yellow/10 border border-lemon-yellow/30 rounded text-xs text-lemon-yellow font-mono">
+                        {result.cappedBy === 'hard_cap'
+                            ? '⚠ Credit capped at $25,000,000 MXN per project (EFICINE Production maximum)'
+                            : '⚠ Credit limited to 80% of total project cost (regla 80/20 — producer must cover ≥20%)'}
+                    </div>
+
+                    <div className="px-3 py-2 bg-lemon-bg-secondary border border-lemon-gray-700 rounded text-[0.6rem] text-lemon-text-muted font-mono">
+                        ℹ Shows the maximum credit this project can attract. Each investor's credit is
+                        also limited to 10% of their prior-year ISR (Art. 189 LISR) — evaluated per investor.
+                    </div>
 
                     {/* Section breakdown */}
                     <div>

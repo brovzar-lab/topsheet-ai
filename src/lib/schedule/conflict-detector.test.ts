@@ -150,7 +150,7 @@ describe('consecutive work day warning', () => {
         const conflicts = detectConflicts(schedule);
 
         const stretch = conflicts.filter(
-            c => c.type === 'cast_double_book' && c.message.includes('consecutive'),
+            c => c.type === 'cast_fatigue' && c.message.includes('consecutive'),
         );
         expect(stretch.length).toBeGreaterThanOrEqual(1);
         expect(stretch[0]!.severity).toBe('warning');
@@ -164,7 +164,7 @@ describe('consecutive work day warning', () => {
         const conflicts = detectConflicts(schedule);
 
         const stretch = conflicts.filter(
-            c => c.type === 'cast_double_book' && c.message.includes('consecutive'),
+            c => c.type === 'cast_fatigue' && c.message.includes('consecutive'),
         );
         expect(stretch).toHaveLength(0);
     });

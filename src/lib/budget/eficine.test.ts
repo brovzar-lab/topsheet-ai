@@ -79,22 +79,26 @@ describe('EFICINE eligibility', () => {
 // ---------------------------------------------------------------------------
 
 describe('EFICINE credit cap', () => {
-    it('caps at $20M MXN (2_000_000_000 centavos)', () => {
+    it('caps at the $25M MXN hard cap when 80% of budget exceeds it', () => {
+        // $50M total budget → 80% = $40M, which exceeds the $25M hard cap
         const draft = makeDraft([
-            { code: '2000' as BudgetCategoryCode, amount: 3_000_000_000 }, // $30M eligible
+            { code: '2000' as BudgetCategoryCode, amount: 5_000_000_000 },
         ]);
         const result = calculateEFICINE(draft);
-        expect(result.creditCentavos).toBe(2_000_000_000);
+        expect(result.creditCentavos).toBe(2_500_000_000); // $25M MXN
         expect(result.wasCapped).toBe(true);
+        expect(result.cappedBy).toBe('hard_cap');
     });
 
-    it('does not cap below threshold', () => {
+    it('limits to 80% of total budget when below the hard cap', () => {
+        // $10M total budget → 80% = $8M, under the $25M hard cap
         const draft = makeDraft([
-            { code: '2000' as BudgetCategoryCode, amount: 500_000_000 }, // $5M eligible
+            { code: '2000' as BudgetCategoryCode, amount: 1_000_000_000 },
         ]);
         const result = calculateEFICINE(draft);
-        expect(result.creditCentavos).toBe(500_000_000);
+        expect(result.creditCentavos).toBe(800_000_000); // 80% of $10M
         expect(result.wasCapped).toBe(false);
+        expect(result.cappedBy).toBe('budget_share');
     });
 });
 

@@ -326,6 +326,19 @@ export function SchedulePage() {
         [projectId, schedule, moveStrip]
     );
 
+    // B-08: count unique sceneNumbers, not strips (splits create > 1 strip per scene)
+    // Must be declared before the guards below — hooks cannot run after an early return.
+    const totalScenes = useMemo(() => {
+        if (!schedule) return 0;
+        const sceneNums = new Set<string>();
+        for (const day of schedule.shootDays) {
+            for (const strip of day.strips) {
+                sceneNums.add(strip.sceneNumber);
+            }
+        }
+        return sceneNums.size;
+    }, [schedule]);
+
     // Guards — must come before derived stats to avoid NaN/crash on empty state
     if (!projectId) {
         return (
@@ -355,17 +368,6 @@ export function SchedulePage() {
 
     // Compute summary stats (safe: projectId and scenes are guaranteed above)
     const totalDays = schedule?.shootDays.length ?? 0;
-    // B-08: count unique sceneNumbers, not strips (splits create > 1 strip per scene)
-    const totalScenes = useMemo(() => {
-        if (!schedule) return 0;
-        const sceneNums = new Set<string>();
-        for (const day of schedule.shootDays) {
-            for (const strip of day.strips) {
-                sceneNums.add(strip.sceneNumber);
-            }
-        }
-        return sceneNums.size;
-    }, [schedule]);
     const totalPages = schedule?.shootDays.reduce((sum, d) => sum + d.totalPages, 0) ?? 0;
     const totalPagesDisplay = `${Math.floor(totalPages / 8)}${totalPages % 8 !== 0 ? ` ${totalPages % 8}/8` : ''}`;
 
