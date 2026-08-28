@@ -19,9 +19,9 @@ test.describe('Accessibility', () => {
 
   test('skip-to-main link is present and focusable', async ({ page }) => {
     await page.goto('/');
-    // Tab to skip link
-    await page.keyboard.press('Tab');
     const skipLink = page.getByRole('link', { name: /skip to main/i });
+    await expect(skipLink).toBeAttached();
+    await page.keyboard.press('Tab');
     await expect(skipLink).toBeFocused();
   });
 });

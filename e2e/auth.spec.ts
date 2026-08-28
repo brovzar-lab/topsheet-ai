@@ -9,10 +9,11 @@ test.describe('Auth gate', () => {
 
   test('sign-in button is accessible by keyboard', async ({ page }) => {
     await page.goto('/');
+    const btn = page.getByRole('button', { name: /continue with google/i });
+    await expect(btn).toBeVisible();
     await page.keyboard.press('Tab');
     // Skip link should be focusable first
     await page.keyboard.press('Tab');
-    const btn = page.getByRole('button', { name: /continue with google/i });
     await expect(btn).toBeFocused();
   });
 
