@@ -4,6 +4,10 @@
 
 Upload a screenplay PDF → AI breaks it down scene by scene → generates a shooting schedule → produces a detailed budget in MXN using real Mexican industry pricing (388 line items across 34 categories).
 
+## Screenshot
+
+![Topsheet AI main page](docs/audits/screenshots/desktop-1440-home.png)
+
 ---
 
 ## Architecture
