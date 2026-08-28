@@ -24,6 +24,12 @@ export function AuthGate({ children }: AuthGateProps) {
     // No user — show sign-in screen
     return (
         <div className="min-h-screen bg-lemon-bg-primary flex flex-col items-center justify-center gap-8">
+            <a
+                href="#auth-main"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-lemon-cyan focus:text-lemon-black focus:font-mono focus:text-xs focus:rounded focus:uppercase focus:tracking-wider"
+            >
+                Skip to main content
+            </a>
             {/* Logo mark */}
             <div className="flex items-center gap-4">
                 <img
@@ -47,7 +53,7 @@ export function AuthGate({ children }: AuthGateProps) {
             </p>
 
             {/* Sign-in card */}
-            <main className="bg-lemon-bg-elevated border border-lemon-gray-700 rounded-xl p-8 flex flex-col items-center gap-6 w-80">
+            <main id="auth-main" className="bg-lemon-bg-elevated border border-lemon-gray-700 rounded-xl p-8 flex flex-col items-center gap-6 w-80">
                 <Clapperboard size={32} className="text-lemon-cyan" />
                 <div className="text-center">
                     <p className="text-lemon-text-primary font-display font-bold text-base">
@@ -60,7 +66,7 @@ export function AuthGate({ children }: AuthGateProps) {
                 <button
                     data-testid="auth-signin-button"
                     onClick={signInWithGoogle}
-                    aria-label="Sign in with Google"
+                    aria-label="Continue with Google"
                     className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-semibold text-sm px-5 py-3 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">

@@ -13,8 +13,10 @@ jobs:
     name: Playwright E2E
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
-
+    env:
+      VITE_FIREBASE_API_KEY: demo-api-key
+      VITE_FIREBASE_AUTH_DOMAIN: ci-project.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: ci-project
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,10 +37,10 @@ jobs:
         run: npm run build
 
       - name: Start dev server
-        run: npm run dev &
+        run: npm run dev -- --host 127.0.0.1 --port 5207 --strictPort &
 
       - name: Wait for server
-        run: npx wait-on http://localhost:5173 --timeout 30000
+        run: npx wait-on http://127.0.0.1:5207 --timeout 30000
 
       - name: Run Playwright tests
         run: npm run test:e2e
